@@ -27,90 +27,43 @@ namespace ScheduleViewerApp
 
         private void InitializeComponent()
         {
-            Text = "Расписание НФ НИТУ МИСИС";
-            MinimumSize = new Size(1080, 720);
+            Text = AppInfo.ProductName + " Viewer v" + AppInfo.Version;
+            MinimumSize = new Size(1120, 760);
             StartPosition = FormStartPosition.CenterScreen;
+            UiTheme.StyleForm(this);
 
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.ColumnCount = 1;
-            root.RowCount = 6;
-            root.Padding = new Padding(12);
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowCount = 7;
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
             Controls.Add(root);
 
-            FlowLayoutPanel loadPanel = new FlowLayoutPanel();
-            loadPanel.Dock = DockStyle.Fill;
-            loadPanel.AutoSize = true;
-            loadPanel.WrapContents = false;
-            root.Controls.Add(loadPanel, 0, 0);
+            root.Controls.Add(CreateHeader(), 0, 0);
+            root.Controls.Add(CreateLoadPanel(), 0, 1);
+            root.Controls.Add(CreateFilterPanel(), 0, 2);
 
-            Label urlLabel = new Label();
-            urlLabel.Text = "URL:";
-            urlLabel.TextAlign = ContentAlignment.MiddleLeft;
-            urlLabel.Width = 38;
-            urlLabel.Height = 32;
-            loadPanel.Controls.Add(urlLabel);
-
-            _urlTextBox = new TextBox();
-            _urlTextBox.Width = 430;
-            _urlTextBox.Text = "http://localhost:5088/schedule.json";
-            loadPanel.Controls.Add(_urlTextBox);
-
-            Button loadButton = new Button();
-            loadButton.Text = "Загрузить";
-            loadButton.Width = 105;
-            loadButton.Height = 32;
-            loadButton.Click += LoadButtonClick;
-            loadPanel.Controls.Add(loadButton);
-
-            Button openButton = new Button();
-            openButton.Text = "Открыть JSON";
-            openButton.Width = 120;
-            openButton.Height = 32;
-            openButton.Click += OpenButtonClick;
-            loadPanel.Controls.Add(openButton);
-
-            FlowLayoutPanel filterPanel = new FlowLayoutPanel();
-            filterPanel.Dock = DockStyle.Fill;
-            filterPanel.AutoSize = true;
-            filterPanel.WrapContents = false;
-            filterPanel.Margin = new Padding(0, 8, 0, 8);
-            root.Controls.Add(filterPanel, 0, 1);
-
-            _modeComboBox = new ComboBox();
-            _modeComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            _modeComboBox.Width = 150;
-            _modeComboBox.Items.Add("Группа");
-            _modeComboBox.Items.Add("Преподаватель");
-            _modeComboBox.SelectedIndex = 0;
-            _modeComboBox.SelectedIndexChanged += FilterChanged;
-            filterPanel.Controls.Add(_modeComboBox);
-
-            _filterComboBox = new ComboBox();
-            _filterComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            _filterComboBox.Width = 220;
-            _filterComboBox.SelectedIndexChanged += FilterChanged;
-            filterPanel.Controls.Add(_filterComboBox);
-
-            _dateComboBox = new ComboBox();
-            _dateComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            _dateComboBox.Width = 220;
-            _dateComboBox.SelectedIndexChanged += FilterChanged;
-            filterPanel.Controls.Add(_dateComboBox);
-
+            Panel currentPanel = new Panel();
+            currentPanel.Dock = DockStyle.Fill;
+            currentPanel.Padding = new Padding(14, 4, 14, 8);
+            currentPanel.BackColor = UiTheme.Background;
             _currentLabel = new Label();
             _currentLabel.Dock = DockStyle.Fill;
-            _currentLabel.AutoSize = true;
-            _currentLabel.Font = new Font(Font.FontFamily, 10, FontStyle.Bold);
-            _currentLabel.Padding = new Padding(0, 0, 0, 8);
+            _currentLabel.BackColor = UiTheme.Surface;
+            _currentLabel.BorderStyle = BorderStyle.FixedSingle;
+            _currentLabel.ForeColor = UiTheme.Text;
+            _currentLabel.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
+            _currentLabel.Padding = new Padding(12, 0, 12, 0);
+            _currentLabel.TextAlign = ContentAlignment.MiddleLeft;
             _currentLabel.Text = "Загрузите расписание.";
-            root.Controls.Add(_currentLabel, 0, 2);
+            currentPanel.Controls.Add(_currentLabel);
+            root.Controls.Add(currentPanel, 0, 3);
 
             _grid = new DataGridView();
             _grid.Dock = DockStyle.Fill;
@@ -120,25 +73,149 @@ namespace ScheduleViewerApp
             _grid.RowHeadersVisible = false;
             _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
             _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            _grid.BackgroundColor = Color.White;
             _grid.AutoGenerateColumns = false;
             ConfigureGrid(_grid);
-            root.Controls.Add(_grid, 0, 3);
+            UiTheme.StyleGrid(_grid);
+            root.Controls.Add(_grid, 0, 4);
 
+            Panel notesPanel = new Panel();
+            notesPanel.Dock = DockStyle.Fill;
+            notesPanel.Padding = new Padding(14, 8, 14, 8);
+            notesPanel.BackColor = UiTheme.Background;
             _notesTextBox = new TextBox();
             _notesTextBox.Dock = DockStyle.Fill;
             _notesTextBox.Multiline = true;
             _notesTextBox.ReadOnly = true;
             _notesTextBox.ScrollBars = ScrollBars.Vertical;
-            _notesTextBox.BackColor = Color.White;
-            root.Controls.Add(_notesTextBox, 0, 4);
+            _notesTextBox.BackColor = Color.FromArgb(255, 250, 229);
+            _notesTextBox.BorderStyle = BorderStyle.FixedSingle;
+            _notesTextBox.ForeColor = Color.FromArgb(93, 74, 10);
+            _notesTextBox.Text = "Коды подключения появятся для дистанционных занятий.";
+            notesPanel.Controls.Add(_notesTextBox);
+            root.Controls.Add(notesPanel, 0, 5);
 
             _statusLabel = new Label();
             _statusLabel.Dock = DockStyle.Fill;
-            _statusLabel.AutoSize = true;
-            _statusLabel.Padding = new Padding(0, 8, 0, 0);
-            _statusLabel.Text = "Сетевой просмотр требует доступного интернета и сервера расписания.";
-            root.Controls.Add(_statusLabel, 0, 5);
+            _statusLabel.BackColor = UiTheme.Background;
+            _statusLabel.ForeColor = UiTheme.Muted;
+            _statusLabel.Padding = new Padding(14, 0, 14, 0);
+            _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            _statusLabel.Text = "Сетевой просмотр требует доступного интернета и работающего сервера расписания.";
+            root.Controls.Add(_statusLabel, 0, 6);
+        }
+
+        private Control CreateHeader()
+        {
+            Panel header = new Panel();
+            header.Dock = DockStyle.Fill;
+            header.BackColor = UiTheme.Header;
+            header.Padding = new Padding(18, 16, 18, 12);
+
+            TableLayoutPanel layout = new TableLayoutPanel();
+            layout.Dock = DockStyle.Fill;
+            layout.ColumnCount = 1;
+            layout.RowCount = 2;
+            header.Controls.Add(layout);
+
+            layout.Controls.Add(UiTheme.CreateTitle("Расписание НФ НИТУ МИСИС"), 0, 0);
+            layout.Controls.Add(UiTheme.CreateSubtitle("Просмотр по группе или преподавателю • подключение к серверу учебного отдела • v" + AppInfo.Version), 0, 1);
+            return header;
+        }
+
+        private Control CreateLoadPanel()
+        {
+            Panel panel = new Panel();
+            panel.Dock = DockStyle.Fill;
+            panel.Padding = new Padding(14, 14, 14, 6);
+            panel.BackColor = UiTheme.Background;
+
+            TableLayoutPanel layout = new TableLayoutPanel();
+            layout.Dock = DockStyle.Fill;
+            layout.ColumnCount = 4;
+            layout.RowCount = 1;
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            panel.Controls.Add(layout);
+
+            Label label = CreateSmallLabel("Сетевой URL");
+            layout.Controls.Add(label, 0, 0);
+
+            _urlTextBox = new TextBox();
+            _urlTextBox.Dock = DockStyle.Fill;
+            _urlTextBox.Text = "http://localhost:5088/schedule.json";
+            UiTheme.StyleTextBox(_urlTextBox);
+            layout.Controls.Add(_urlTextBox, 1, 0);
+
+            Button loadButton = new Button();
+            loadButton.Text = "Загрузить";
+            loadButton.Dock = DockStyle.Fill;
+            loadButton.Click += LoadButtonClick;
+            UiTheme.StyleButton(loadButton, true);
+            layout.Controls.Add(loadButton, 2, 0);
+
+            Button openButton = new Button();
+            openButton.Text = "Открыть JSON";
+            openButton.Dock = DockStyle.Fill;
+            openButton.Click += OpenButtonClick;
+            UiTheme.StyleButton(openButton, false);
+            layout.Controls.Add(openButton, 3, 0);
+
+            return panel;
+        }
+
+        private Control CreateFilterPanel()
+        {
+            Panel panel = new Panel();
+            panel.Dock = DockStyle.Fill;
+            panel.Padding = new Padding(14, 0, 14, 8);
+            panel.BackColor = UiTheme.Background;
+
+            TableLayoutPanel layout = new TableLayoutPanel();
+            layout.Dock = DockStyle.Fill;
+            layout.ColumnCount = 3;
+            layout.RowCount = 1;
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+            panel.Controls.Add(layout);
+
+            _modeComboBox = new ComboBox();
+            _modeComboBox.Dock = DockStyle.Fill;
+            _modeComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _modeComboBox.Items.Add("Группа");
+            _modeComboBox.Items.Add("Преподаватель");
+            _modeComboBox.SelectedIndex = 0;
+            _modeComboBox.SelectedIndexChanged += FilterChanged;
+            UiTheme.StyleCombo(_modeComboBox);
+            layout.Controls.Add(_modeComboBox, 0, 0);
+
+            _filterComboBox = new ComboBox();
+            _filterComboBox.Dock = DockStyle.Fill;
+            _filterComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _filterComboBox.SelectedIndexChanged += FilterChanged;
+            UiTheme.StyleCombo(_filterComboBox);
+            layout.Controls.Add(_filterComboBox, 1, 0);
+
+            _dateComboBox = new ComboBox();
+            _dateComboBox.Dock = DockStyle.Fill;
+            _dateComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _dateComboBox.SelectedIndexChanged += FilterChanged;
+            UiTheme.StyleCombo(_dateComboBox);
+            layout.Controls.Add(_dateComboBox, 2, 0);
+
+            return panel;
+        }
+
+        private static Label CreateSmallLabel(string text)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.ForeColor = UiTheme.Muted;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+            label.Dock = DockStyle.Fill;
+            return label;
         }
 
         private static void ConfigureGrid(DataGridView grid)
@@ -264,7 +341,7 @@ namespace ScheduleViewerApp
             {
                 _grid.DataSource = new List<Lesson>();
                 _currentLabel.Text = "Загрузите расписание.";
-                _notesTextBox.Text = string.Empty;
+                _notesTextBox.Text = "Коды подключения появятся для дистанционных занятий.";
                 return;
             }
 
@@ -328,13 +405,17 @@ namespace ScheduleViewerApp
 
             if (current == null)
             {
+                _currentLabel.BackColor = UiTheme.Surface;
+                _currentLabel.ForeColor = UiTheme.Text;
                 _currentLabel.Text = "Сейчас занятие не идет.";
                 return;
             }
 
+            _currentLabel.BackColor = Color.FromArgb(255, 247, 230);
+            _currentLabel.ForeColor = UiTheme.Text;
             if (byTeacher)
             {
-                _currentLabel.Text = string.Format("Сейчас: {0}, {1}, {2}, {3}, ауд./среда: {4}", current.PairNumber, current.TimeRange, current.Group, current.Subject, current.Room);
+                _currentLabel.Text = string.Format("Сейчас: {0} пара, {1}, группа {2}, {3}, ауд./среда: {4}", current.PairNumber, current.TimeRange, current.Group, current.Subject, current.Room);
             }
             else
             {
@@ -358,7 +439,7 @@ namespace ScheduleViewerApp
 
             _notesTextBox.Text = lines.Count == 0
                 ? "Удаленных занятий в выбранном расписании нет."
-                : "Коды подключения:\r\n" + string.Join("\r\n", lines.ToArray());
+                : "Коды подключения:" + Environment.NewLine + string.Join(Environment.NewLine, lines.ToArray());
         }
 
         private DigitalTool FindDigitalTool(string teacher)

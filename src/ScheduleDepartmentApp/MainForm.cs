@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Linq;
-using System.Net;
-using System.Net.Sockets;
 using System.Windows.Forms;
 using ScheduleParser.Core;
 
@@ -17,13 +15,15 @@ namespace ScheduleDepartmentApp
         private ScheduleDocument _document;
         private TextBox _filesTextBox;
         private TextBox _jsonPathTextBox;
-        private TextBox _prefixTextBox;
+        private TextBox _portTextBox;
+        private TextBox _serverUrlsTextBox;
         private Label _statusLabel;
-        private Label _serverLabel;
+        private Label _serverStateLabel;
         private DataGridView _grid;
         private Button _saveButton;
         private Button _startServerButton;
         private Button _stopServerButton;
+        private Button _openWebButton;
 
         public MainForm()
         {
@@ -40,59 +40,23 @@ namespace ScheduleDepartmentApp
 
         private void InitializeComponent()
         {
-            Text = "Учебный отдел - парсер расписания НФ НИТУ МИСИС";
-            MinimumSize = new Size(1080, 680);
+            Text = "Учебный отдел - " + AppInfo.ProductName + " v" + AppInfo.Version;
+            MinimumSize = new Size(1120, 740);
             StartPosition = FormStartPosition.CenterScreen;
+            UiTheme.StyleForm(this);
 
             TableLayoutPanel root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
             root.ColumnCount = 1;
             root.RowCount = 4;
-            root.Padding = new Padding(12);
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
             Controls.Add(root);
 
-            FlowLayoutPanel importPanel = new FlowLayoutPanel();
-            importPanel.Dock = DockStyle.Fill;
-            importPanel.AutoSize = true;
-            importPanel.WrapContents = false;
-            root.Controls.Add(importPanel, 0, 0);
-
-            Button openButton = new Button();
-            openButton.Text = "Открыть Excel";
-            openButton.Width = 130;
-            openButton.Height = 32;
-            openButton.Click += OpenButtonClick;
-            importPanel.Controls.Add(openButton);
-
-            _saveButton = new Button();
-            _saveButton.Text = "Сохранить JSON";
-            _saveButton.Width = 140;
-            _saveButton.Height = 32;
-            _saveButton.Enabled = false;
-            _saveButton.Click += SaveButtonClick;
-            importPanel.Controls.Add(_saveButton);
-
-            Label jsonLabel = new Label();
-            jsonLabel.Text = "Файл публикации:";
-            jsonLabel.TextAlign = ContentAlignment.MiddleLeft;
-            jsonLabel.Width = 110;
-            jsonLabel.Height = 32;
-            importPanel.Controls.Add(jsonLabel);
-
-            _jsonPathTextBox = new TextBox();
-            _jsonPathTextBox.Width = 420;
-            _jsonPathTextBox.Text = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "schedule.json");
-            importPanel.Controls.Add(_jsonPathTextBox);
-
-            _filesTextBox = new TextBox();
-            _filesTextBox.Dock = DockStyle.Fill;
-            _filesTextBox.ReadOnly = true;
-            _filesTextBox.Margin = new Padding(0, 8, 0, 8);
-            root.Controls.Add(_filesTextBox, 0, 1);
+            root.Controls.Add(CreateHeader(), 0, 0);
+            root.Controls.Add(CreateImportPanel(), 0, 1);
 
             _grid = new DataGridView();
             _grid.Dock = DockStyle.Fill;
@@ -102,64 +66,197 @@ namespace ScheduleDepartmentApp
             _grid.RowHeadersVisible = false;
             _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
             _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            _grid.BackgroundColor = Color.White;
             _grid.AutoGenerateColumns = false;
             ConfigureGrid(_grid);
+            UiTheme.StyleGrid(_grid);
             root.Controls.Add(_grid, 0, 2);
 
-            TableLayoutPanel bottom = new TableLayoutPanel();
-            bottom.Dock = DockStyle.Fill;
-            bottom.ColumnCount = 1;
-            bottom.RowCount = 3;
-            bottom.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            bottom.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            bottom.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            root.Controls.Add(bottom, 0, 3);
+            root.Controls.Add(CreateServerPanel(), 0, 3);
+        }
 
-            FlowLayoutPanel serverPanel = new FlowLayoutPanel();
-            serverPanel.Dock = DockStyle.Fill;
-            serverPanel.AutoSize = true;
-            serverPanel.WrapContents = false;
-            bottom.Controls.Add(serverPanel, 0, 0);
+        private Control CreateHeader()
+        {
+            Panel header = new Panel();
+            header.Dock = DockStyle.Fill;
+            header.BackColor = UiTheme.Header;
+            header.Padding = new Padding(18, 16, 18, 12);
 
-            Label prefixLabel = new Label();
-            prefixLabel.Text = "HTTP-адрес:";
-            prefixLabel.TextAlign = ContentAlignment.MiddleLeft;
-            prefixLabel.Width = 85;
-            prefixLabel.Height = 32;
-            serverPanel.Controls.Add(prefixLabel);
+            TableLayoutPanel layout = new TableLayoutPanel();
+            layout.Dock = DockStyle.Fill;
+            layout.ColumnCount = 1;
+            layout.RowCount = 2;
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            header.Controls.Add(layout);
 
-            _prefixTextBox = new TextBox();
-            _prefixTextBox.Width = 260;
-            _prefixTextBox.Text = "http://localhost:5088/";
-            serverPanel.Controls.Add(_prefixTextBox);
+            layout.Controls.Add(UiTheme.CreateTitle("Учебный отдел"), 0, 0);
+            layout.Controls.Add(UiTheme.CreateSubtitle("Импорт Excel, публикация расписания в локальной сети и веб-доступ для телефона • v" + AppInfo.Version), 0, 1);
+            return header;
+        }
+
+        private Control CreateImportPanel()
+        {
+            Panel panel = new Panel();
+            panel.Dock = DockStyle.Top;
+            panel.Height = 118;
+            panel.Padding = new Padding(14);
+            panel.BackColor = UiTheme.Background;
+
+            TableLayoutPanel layout = new TableLayoutPanel();
+            layout.Dock = DockStyle.Fill;
+            layout.ColumnCount = 1;
+            layout.RowCount = 3;
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            panel.Controls.Add(layout);
+
+            FlowLayoutPanel actions = new FlowLayoutPanel();
+            actions.Dock = DockStyle.Fill;
+            actions.WrapContents = false;
+            actions.BackColor = UiTheme.Background;
+            layout.Controls.Add(actions, 0, 0);
+
+            Button openButton = new Button();
+            openButton.Text = "Открыть Excel";
+            openButton.Width = 132;
+            openButton.Click += OpenButtonClick;
+            UiTheme.StyleButton(openButton, true);
+            actions.Controls.Add(openButton);
+
+            _saveButton = new Button();
+            _saveButton.Text = "Сохранить JSON";
+            _saveButton.Width = 150;
+            _saveButton.Enabled = false;
+            _saveButton.Click += SaveButtonClick;
+            UiTheme.StyleButton(_saveButton, false);
+            actions.Controls.Add(_saveButton);
+
+            Label jsonLabel = CreateSmallLabel("Файл публикации");
+            jsonLabel.Width = 120;
+            actions.Controls.Add(jsonLabel);
+
+            _jsonPathTextBox = new TextBox();
+            _jsonPathTextBox.Width = 480;
+            _jsonPathTextBox.Text = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "schedule.json");
+            UiTheme.StyleTextBox(_jsonPathTextBox);
+            actions.Controls.Add(_jsonPathTextBox);
+
+            _filesTextBox = new TextBox();
+            _filesTextBox.Dock = DockStyle.Fill;
+            _filesTextBox.ReadOnly = true;
+            _filesTextBox.Text = "Файлы Excel пока не выбраны";
+            UiTheme.StyleTextBox(_filesTextBox);
+            layout.Controls.Add(_filesTextBox, 0, 1);
+
+            _statusLabel = new Label();
+            _statusLabel.Dock = DockStyle.Fill;
+            _statusLabel.Text = "Выберите Excel-файл расписания. После импорта можно запустить сетевой сервер.";
+            _statusLabel.ForeColor = UiTheme.Muted;
+            _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            layout.Controls.Add(_statusLabel, 0, 2);
+
+            return panel;
+        }
+
+        private Control CreateServerPanel()
+        {
+            Panel outer = new Panel();
+            outer.Dock = DockStyle.Fill;
+            outer.Padding = new Padding(14, 8, 14, 14);
+            outer.BackColor = UiTheme.Background;
+
+            Panel panel = new Panel();
+            panel.Dock = DockStyle.Fill;
+            panel.Padding = new Padding(14);
+            panel.BackColor = UiTheme.Surface;
+            panel.BorderStyle = BorderStyle.FixedSingle;
+            outer.Controls.Add(panel);
+
+            TableLayoutPanel layout = new TableLayoutPanel();
+            layout.Dock = DockStyle.Fill;
+            layout.ColumnCount = 2;
+            layout.RowCount = 2;
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 420));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            panel.Controls.Add(layout);
+
+            FlowLayoutPanel controls = new FlowLayoutPanel();
+            controls.Dock = DockStyle.Fill;
+            controls.WrapContents = false;
+            layout.Controls.Add(controls, 0, 0);
+
+            Label portLabel = CreateSmallLabel("Порт");
+            portLabel.Width = 46;
+            controls.Controls.Add(portLabel);
+
+            _portTextBox = new TextBox();
+            _portTextBox.Width = 78;
+            _portTextBox.Text = "5088";
+            UiTheme.StyleTextBox(_portTextBox);
+            controls.Controls.Add(_portTextBox);
 
             _startServerButton = new Button();
-            _startServerButton.Text = "Запустить сервер";
-            _startServerButton.Width = 150;
-            _startServerButton.Height = 32;
+            _startServerButton.Text = "Запустить";
+            _startServerButton.Width = 118;
             _startServerButton.Enabled = false;
             _startServerButton.Click += StartServerButtonClick;
-            serverPanel.Controls.Add(_startServerButton);
+            UiTheme.StyleButton(_startServerButton, true);
+            controls.Controls.Add(_startServerButton);
 
             _stopServerButton = new Button();
             _stopServerButton.Text = "Остановить";
-            _stopServerButton.Width = 105;
-            _stopServerButton.Height = 32;
+            _stopServerButton.Width = 118;
             _stopServerButton.Enabled = false;
             _stopServerButton.Click += StopServerButtonClick;
-            serverPanel.Controls.Add(_stopServerButton);
+            UiTheme.StyleButton(_stopServerButton, false);
+            controls.Controls.Add(_stopServerButton);
 
-            _serverLabel = new Label();
-            _serverLabel.AutoSize = true;
-            _serverLabel.Padding = new Padding(0, 8, 0, 0);
-            bottom.Controls.Add(_serverLabel, 0, 1);
+            _openWebButton = new Button();
+            _openWebButton.Text = "Открыть";
+            _openWebButton.Width = 104;
+            _openWebButton.Enabled = false;
+            _openWebButton.Click += OpenWebButtonClick;
+            UiTheme.StyleButton(_openWebButton, false);
+            controls.Controls.Add(_openWebButton);
 
-            _statusLabel = new Label();
-            _statusLabel.AutoSize = true;
-            _statusLabel.Padding = new Padding(0, 8, 0, 0);
-            _statusLabel.Text = "Выберите Excel-файл расписания.";
-            bottom.Controls.Add(_statusLabel, 0, 2);
+            _serverStateLabel = new Label();
+            _serverStateLabel.Dock = DockStyle.Fill;
+            _serverStateLabel.Text = "Сервер остановлен";
+            _serverStateLabel.ForeColor = UiTheme.Muted;
+            _serverStateLabel.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+            _serverStateLabel.TextAlign = ContentAlignment.MiddleLeft;
+            layout.Controls.Add(_serverStateLabel, 1, 0);
+
+            Label hint = new Label();
+            hint.Dock = DockStyle.Fill;
+            hint.ForeColor = UiTheme.Muted;
+            hint.Text = "На телефоне или другом ПК откройте ссылку из правого блока. Устройства должны быть в одной Wi-Fi/LAN сети. Если Windows спросит доступ через брандмауэр, разрешите частные сети.";
+            hint.TextAlign = ContentAlignment.TopLeft;
+            layout.Controls.Add(hint, 0, 1);
+
+            _serverUrlsTextBox = new TextBox();
+            _serverUrlsTextBox.Dock = DockStyle.Fill;
+            _serverUrlsTextBox.Multiline = true;
+            _serverUrlsTextBox.ReadOnly = true;
+            _serverUrlsTextBox.ScrollBars = ScrollBars.Vertical;
+            _serverUrlsTextBox.Text = "Ссылки появятся после запуска сервера.";
+            UiTheme.StyleTextBox(_serverUrlsTextBox);
+            layout.Controls.Add(_serverUrlsTextBox, 1, 1);
+
+            return outer;
+        }
+
+        private static Label CreateSmallLabel(string text)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.ForeColor = UiTheme.Muted;
+            label.TextAlign = ContentAlignment.MiddleLeft;
+            label.Height = 36;
+            return label;
         }
 
         private static void ConfigureGrid(DataGridView grid)
@@ -206,7 +303,7 @@ namespace ScheduleDepartmentApp
                     _filesTextBox.Text = string.Join("; ", dialog.FileNames);
                     BindLessons();
                     SaveToPublicationPath();
-                    SetStatus(string.Format("Готово: {0} занятий, {1} групп, {2} преподавателей. JSON сохранен.", _document.Lessons.Count, _document.Groups.Count, _document.Teachers.Count));
+                    SetStatus(string.Format("Готово: {0} занятий, {1} групп, {2} преподавателей. Данные подготовлены для сети.", _document.Lessons.Count, _document.Groups.Count, _document.Teachers.Count));
                     _saveButton.Enabled = true;
                     _startServerButton.Enabled = true;
                 }
@@ -260,11 +357,14 @@ namespace ScheduleDepartmentApp
                 }
 
                 SaveToPublicationPath();
-                _server.Start(_prefixTextBox.Text, _jsonPathTextBox.Text);
+                _server.Start(_portTextBox.Text, _jsonPathTextBox.Text);
                 _startServerButton.Enabled = false;
                 _stopServerButton.Enabled = true;
-                _serverLabel.Text = "Сервер запущен: " + _server.Prefix + "schedule.json" + GetLanHint();
-                SetStatus("Расписание опубликовано по сети.");
+                _openWebButton.Enabled = true;
+                _serverStateLabel.ForeColor = UiTheme.Accent;
+                _serverStateLabel.Text = "Сервер работает на порту " + _server.Port.ToString();
+                _serverUrlsTextBox.Text = BuildServerUrlsText();
+                SetStatus("Расписание опубликовано как веб-страница и JSON API.");
             }
             catch (Exception ex)
             {
@@ -278,8 +378,63 @@ namespace ScheduleDepartmentApp
             _server.Stop();
             _startServerButton.Enabled = _document != null;
             _stopServerButton.Enabled = false;
-            _serverLabel.Text = string.Empty;
+            _openWebButton.Enabled = false;
+            _serverStateLabel.ForeColor = UiTheme.Muted;
+            _serverStateLabel.Text = "Сервер остановлен";
+            _serverUrlsTextBox.Text = "Ссылки появятся после запуска сервера.";
             SetStatus("Сервер остановлен.");
+        }
+
+        private void OpenWebButtonClick(object sender, EventArgs e)
+        {
+            if (!_server.IsRunning)
+            {
+                return;
+            }
+
+            try
+            {
+                Process.Start(_server.LocalUrl);
+            }
+            catch
+            {
+                Clipboard.SetText(_server.LocalUrl);
+                SetStatus("Локальная ссылка скопирована в буфер обмена: " + _server.LocalUrl);
+            }
+        }
+
+        private string BuildServerUrlsText()
+        {
+            List<string> lines = new List<string>();
+            lines.Add("Открыть на этом компьютере:");
+            lines.Add(_server.LocalUrl);
+            lines.Add("");
+            lines.Add("Открыть на телефоне или другом Windows-устройстве:");
+            if (_server.NetworkUrls != null && _server.NetworkUrls.Length > 0)
+            {
+                foreach (string url in _server.NetworkUrls)
+                {
+                    lines.Add(url);
+                }
+            }
+            else
+            {
+                lines.Add("LAN-адрес не найден автоматически. Проверьте IP компьютера командой ipconfig.");
+            }
+            lines.Add("");
+            lines.Add("Для Windows-просмотрщика используйте JSON URL:");
+            if (_server.NetworkUrls != null && _server.NetworkUrls.Length > 0)
+            {
+                foreach (string url in _server.NetworkUrls)
+                {
+                    lines.Add(url + "schedule.json");
+                }
+            }
+            else
+            {
+                lines.Add(_server.LocalUrl + "schedule.json");
+            }
+            return string.Join(Environment.NewLine, lines.ToArray());
         }
 
         private void SaveToPublicationPath()
@@ -300,12 +455,10 @@ namespace ScheduleDepartmentApp
             foreach (DataGridViewRow row in _grid.Rows)
             {
                 Lesson lesson = row.DataBoundItem as Lesson;
-                if (lesson == null)
+                if (lesson != null)
                 {
-                    continue;
+                    ApplyLessonColor(row, lesson);
                 }
-
-                ApplyLessonColor(row, lesson);
             }
         }
 
@@ -330,37 +483,6 @@ namespace ScheduleDepartmentApp
         private void SetStatus(string text)
         {
             _statusLabel.Text = text;
-        }
-
-        private static string GetLanHint()
-        {
-            string ip = GetLocalIpAddress();
-            if (string.IsNullOrWhiteSpace(ip))
-            {
-                return string.Empty;
-            }
-
-            return " | Для другой машины в сети: http://" + ip + ":5088/schedule.json";
-        }
-
-        private static string GetLocalIpAddress()
-        {
-            try
-            {
-                IPAddress[] addresses = Dns.GetHostEntry(Dns.GetHostName()).AddressList;
-                foreach (IPAddress address in addresses)
-                {
-                    if (address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address))
-                    {
-                        return address.ToString();
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            return string.Empty;
         }
     }
 }

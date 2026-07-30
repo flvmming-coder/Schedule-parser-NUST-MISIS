@@ -6,4 +6,4 @@ obj/
 *.tmp
 *.log
 data/*.json
-publish/*.json
+publish/

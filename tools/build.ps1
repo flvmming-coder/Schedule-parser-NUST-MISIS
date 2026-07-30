@@ -19,6 +19,8 @@ $viewerSources = Get-ChildItem -LiteralPath (Join-Path $root 'src\ScheduleViewer
 $coreDll = Join-Path $bin 'ScheduleParser.Core.dll'
 $departmentExe = Join-Path $bin 'ScheduleDepartmentApp.exe'
 $viewerExe = Join-Path $bin 'ScheduleViewerApp.exe'
+$webSource = Join-Path $root 'web'
+$webTarget = Join-Path $bin 'web'
 
 & $csc /nologo /codepage:65001 /target:library /out:$coreDll `
     /reference:System.dll `
@@ -52,6 +54,18 @@ if ($LASTEXITCODE -ne 0) { throw "Department app build failed with exit code $LA
     /reference:$coreDll `
     $viewerSources
 if ($LASTEXITCODE -ne 0) { throw "Viewer app build failed with exit code $LASTEXITCODE." }
+
+if (Test-Path -LiteralPath $webSource) {
+    $resolvedBin = [System.IO.Path]::GetFullPath($bin)
+    $resolvedWebTarget = [System.IO.Path]::GetFullPath($webTarget)
+    if (-not $resolvedWebTarget.StartsWith($resolvedBin + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean unexpected web target: $resolvedWebTarget"
+    }
+    if (Test-Path -LiteralPath $webTarget) {
+        Remove-Item -LiteralPath $webTarget -Recurse -Force
+    }
+    Copy-Item -LiteralPath $webSource -Destination $webTarget -Recurse
+}
 
 Write-Host "Built:"
 Write-Host "  $departmentExe"
