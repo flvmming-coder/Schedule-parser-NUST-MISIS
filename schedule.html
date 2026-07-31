@@ -331,7 +331,7 @@
   <header>
     <div class="wrap">
       <h1 class="title">Расписание НФ НИТУ МИСИС</h1>
-      <p class="subtitle">Сетевой просмотр расписания • версия 0.5.2</p>
+      <p class="subtitle">Сетевой просмотр расписания • версия 0.5.3</p>
     </div>
   </header>
 
@@ -379,6 +379,7 @@
   <script>
     const accessProtected = "true" === "true";
     const passwordKey = "nust-misis-schedule-password";
+    const refreshIntervalMs = 300000;
     const state = { doc: null, password: sessionStorage.getItem(passwordKey) || "", refreshTimer: 0 };
     const els = {
       status: document.getElementById("status"),
@@ -418,7 +419,7 @@
 
     function startRefreshTimer() {
       if (!state.refreshTimer) {
-        state.refreshTimer = window.setInterval(loadSchedule, 60000);
+        state.refreshTimer = window.setInterval(loadSchedule, refreshIntervalMs);
       }
     }
 
@@ -433,19 +434,34 @@
         fillPeople();
         fillDates();
         render();
+        const checkedAt = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
         const parsedAt = state.doc.ParsedAt ? " • обновлено " + state.doc.ParsedAt : "";
-        setStatus("Сервер работает" + parsedAt, false);
+        setStatus("Связь есть" + parsedAt + " • проверено " + checkedAt, false);
         return true;
       } catch (error) {
-        if (accessProtected || error.message === "ACCESS_DENIED") {
+        if (error.message === "ACCESS_DENIED") {
           sessionStorage.removeItem(passwordKey);
           goToAccessPage();
         } else {
-          setStatus("Не удалось получить расписание: " + error.message, true);
-          els.lessons.innerHTML = '<div class="empty">Расписание недоступно. Проверьте подключение к интернету или попробуйте обновить страницу.</div>';
+          markScheduleUnavailable(error.message);
         }
 
         return false;
+      }
+    }
+
+    function markScheduleUnavailable(message) {
+      const checkedAt = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+      setStatus("Нет связи с расписанием • последняя попытка " + checkedAt, true);
+      els.current.innerHTML = '<h2>Нет связи</h2><p>Следующая автоматическая проверка будет через 5 минут.</p>';
+      els.lessons.innerHTML = '<div class="empty">Пакеты от сервера не пришли. Расписание временно недоступно.</div>';
+      els.notes.hidden = true;
+      els.notes.innerHTML = "";
+      if (!state.doc) {
+        els.metricLessons.textContent = "0";
+        els.metricGroups.textContent = "0";
+        els.metricTeachers.textContent = "0";
+        els.metricRemote.textContent = "0";
       }
     }
 
