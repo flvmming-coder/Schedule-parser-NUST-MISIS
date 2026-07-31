@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Просмотр расписания НФ НИТУ МИСИС</title>
+  <style>
+    :root {
+      --ink: #15232d;
+      --muted: #63727f;
+      --line: #d9e1e8;
+      --paper: #ffffff;
+      --bg: #f3f7f9;
+      --teal: #0b6b6f;
+      --mint: #d7f0e9;
+      --blue: #dcecff;
+      --amber: #fff1c7;
+      --coral: #f06f58;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: #0d2c36;
+      color: white;
+      padding: 22px 18px 18px;
+      border-bottom: 4px solid var(--coral);
+    }
+
+    .wrap {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+    }
+
+    .title {
+      margin: 0;
+      font-size: clamp(24px, 5vw, 40px);
+      font-weight: 700;
+      line-height: 1.08;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: #c8d8de;
+      font-size: 15px;
+    }
+
+    main {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      padding: 16px 14px 28px;
+    }
+
+    .status {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      min-height: 42px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      box-shadow: 0 8px 22px rgba(19, 35, 45, 0.06);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--teal);
+      flex: 0 0 auto;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    select,
+    button {
+      min-height: 42px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      font: inherit;
+      padding: 0 12px;
+    }
+
+    select {
+      width: 100%;
+    }
+
+    button {
+      align-self: end;
+      border-color: #0b6b6f;
+      background: #0b6b6f;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 8px 22px rgba(19, 35, 45, 0.05);
+    }
+
+    .metric b {
+      display: block;
+      font-size: 24px;
+      line-height: 1;
+      margin-bottom: 6px;
+      color: var(--teal);
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .current {
+      border-left: 5px solid var(--coral);
+      background: var(--paper);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 8px 22px rgba(19, 35, 45, 0.06);
+    }
+
+    .current h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .current p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .lessons {
+      display: grid;
+      gap: 10px;
+    }
+
+    .lesson {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-left: 6px solid var(--teal);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 8px 22px rgba(19, 35, 45, 0.05);
+    }
+
+    .lesson.is-current {
+      outline: 2px solid var(--coral);
+    }
+
+    .lesson.remote {
+      border-left-color: #2477c7;
+    }
+
+    .lesson-top {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .lesson-title {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+
+    .badge {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--mint);
+      color: #07555a;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .remote .badge {
+      background: var(--blue);
+      color: #175a99;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .meta strong {
+      display: block;
+      color: var(--ink);
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .notes {
+      margin-top: 14px;
+      background: #fff8e2;
+      border: 1px solid #f1d98d;
+      border-radius: 8px;
+      padding: 12px;
+      color: #5d4a0a;
+    }
+
+    .empty {
+      padding: 22px;
+      text-align: center;
+      color: var(--muted);
+      background: var(--paper);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+    }
+
+    body.locked main {
+      display: none;
+    }
+
+    .access-gate {
+      min-height: calc(100vh - 112px);
+      display: grid;
+      place-items: center;
+      padding: 24px 14px;
+    }
+
+    .access-box {
+      width: min(420px, 100%);
+      display: grid;
+      gap: 12px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      box-shadow: 0 16px 34px rgba(19, 35, 45, 0.12);
+    }
+
+    .access-box h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.15;
+    }
+
+    .access-box label {
+      text-transform: none;
+      font-size: 14px;
+    }
+
+    .access-box input {
+      min-height: 42px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      font: inherit;
+      padding: 0 12px;
+    }
+
+    .access-error {
+      margin: 0;
+      min-height: 20px;
+      color: var(--coral);
+      font-size: 14px;
+    }
+
+    @media (max-width: 760px) {
+      .toolbar,
+      .summary,
+      .meta {
+        grid-template-columns: 1fr;
+      }
+
+      .lesson-top {
+        display: grid;
+      }
+
+      header {
+        padding-top: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1 class="title">Расписание НФ НИТУ МИСИС</h1>
+      <p class="subtitle">Сетевой просмотр расписания • версия 0.5.2</p>
+    </div>
+  </header>
+
+  <main>
+    <div id="status" class="status"><span class="dot"></span><span>Подключаюсь к серверу расписания...</span></div>
+
+    <section class="toolbar" aria-label="Фильтры">
+      <label>Курс
+        <select id="course"></select>
+      </label>
+      <label>Неделя
+        <select id="week"></select>
+      </label>
+      <label>Режим
+        <select id="mode">
+          <option value="group">Группа</option>
+          <option value="teacher">Преподаватель</option>
+        </select>
+      </label>
+      <label>Кого показать
+        <select id="person"></select>
+      </label>
+      <label>Дата
+        <select id="date"></select>
+      </label>
+      <button id="reload" type="button">Обновить</button>
+    </section>
+
+    <section class="summary" aria-label="Сводка">
+      <div class="metric"><b id="metricLessons">0</b><span>занятий</span></div>
+      <div class="metric"><b id="metricGroups">0</b><span>групп</span></div>
+      <div class="metric"><b id="metricTeachers">0</b><span>преподавателей</span></div>
+      <div class="metric"><b id="metricRemote">0</b><span>дистанционно</span></div>
+    </section>
+
+    <section id="current" class="current">
+      <h2>Сейчас</h2>
+      <p>После загрузки расписания здесь появится текущая пара.</p>
+    </section>
+
+    <section id="lessons" class="lessons"></section>
+    <section id="notes" class="notes" hidden></section>
+  </main>
+
+  <script>
+    const accessProtected = "true" === "true";
+    const passwordKey = "nust-misis-schedule-password";
+    const state = { doc: null, password: sessionStorage.getItem(passwordKey) || "", refreshTimer: 0 };
+    const els = {
+      status: document.getElementById("status"),
+      course: document.getElementById("course"),
+      week: document.getElementById("week"),
+      mode: document.getElementById("mode"),
+      person: document.getElementById("person"),
+      date: document.getElementById("date"),
+      reload: document.getElementById("reload"),
+      lessons: document.getElementById("lessons"),
+      current: document.getElementById("current"),
+      notes: document.getElementById("notes"),
+      metricLessons: document.getElementById("metricLessons"),
+      metricGroups: document.getElementById("metricGroups"),
+      metricTeachers: document.getElementById("metricTeachers"),
+      metricRemote: document.getElementById("metricRemote")
+    };
+
+    els.reload.addEventListener("click", loadSchedule);
+    els.course.addEventListener("change", () => { fillPeople(); fillDates(); render(); });
+    els.week.addEventListener("change", () => { fillPeople(); fillDates(); render(); });
+    els.mode.addEventListener("change", fillPeople);
+    els.person.addEventListener("change", render);
+    els.date.addEventListener("change", render);
+
+    startAccessFlow();
+
+    function startAccessFlow() {
+      if (accessProtected && !state.password) {
+        goToAccessPage();
+        return;
+      }
+
+      loadSchedule();
+      startRefreshTimer();
+    }
+
+    function startRefreshTimer() {
+      if (!state.refreshTimer) {
+        state.refreshTimer = window.setInterval(loadSchedule, 60000);
+      }
+    }
+
+    async function loadSchedule() {
+      setStatus("Загружаю расписание с сервера...", false);
+      try {
+        const response = await fetch("schedule.json?ts=" + Date.now(), { cache: "no-store" });
+        if (!response.ok) throw new Error("Сервер вернул статус " + response.status);
+        const payload = JSON.parse(await response.text());
+        state.doc = await openSchedulePayload(payload);
+        fillCourseWeek();
+        fillPeople();
+        fillDates();
+        render();
+        const parsedAt = state.doc.ParsedAt ? " • обновлено " + state.doc.ParsedAt : "";
+        setStatus("Сервер работает" + parsedAt, false);
+        return true;
+      } catch (error) {
+        if (accessProtected || error.message === "ACCESS_DENIED") {
+          sessionStorage.removeItem(passwordKey);
+          goToAccessPage();
+        } else {
+          setStatus("Не удалось получить расписание: " + error.message, true);
+          els.lessons.innerHTML = '<div class="empty">Расписание недоступно. Проверьте подключение к интернету или попробуйте обновить страницу.</div>';
+        }
+
+        return false;
+      }
+    }
+
+    async function openSchedulePayload(payload) {
+      if (payload && payload.Protected === true) {
+        if (!state.password) {
+          throw new Error("ACCESS_DENIED");
+        }
+
+        return decryptProtectedSchedule(payload, state.password);
+      }
+
+      return payload;
+    }
+
+    async function decryptProtectedSchedule(payload, password) {
+      if (!window.crypto || !window.crypto.subtle) {
+        throw new Error("ACCESS_DENIED");
+      }
+
+      const encoder = new TextEncoder();
+      const passwordKey = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+      const salt = base64ToBytes(payload.Salt || "");
+      const iv = base64ToBytes(payload.Iv || "");
+      const cipherText = base64ToBytes(payload.Ciphertext || "");
+      const tag = base64ToBytes(payload.Tag || "");
+      const derivedBits = await crypto.subtle.deriveBits({
+        name: "PBKDF2",
+        salt,
+        iterations: Number(payload.Iterations || 0),
+        hash: "SHA-256"
+      }, passwordKey, 512);
+      const derived = new Uint8Array(derivedBits);
+      const aesKeyBytes = derived.slice(0, 32);
+      const macKeyBytes = derived.slice(32, 64);
+      const macKey = await crypto.subtle.importKey("raw", macKeyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const expectedTag = new Uint8Array(await crypto.subtle.sign("HMAC", macKey, joinBytes(salt, iv, cipherText)));
+
+      if (!sameBytes(tag, expectedTag)) {
+        throw new Error("ACCESS_DENIED");
+      }
+
+      const aesKey = await crypto.subtle.importKey("raw", aesKeyBytes, "AES-CBC", false, ["decrypt"]);
+      const plainBuffer = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, aesKey, cipherText);
+      return JSON.parse(new TextDecoder("utf-8").decode(plainBuffer));
+    }
+
+    function goToAccessPage() {
+      location.href = "index.html?denied=1";
+    }
+
+    function fillPeople() {
+      if (!state.doc) return;
+      const previous = els.person.value;
+      const lessons = lessonsForCourseAndWeek();
+      const values = lessons.map(lesson => els.mode.value === "teacher" ? lesson.Teacher : lesson.Group)
+        .filter(Boolean);
+      const list = Array.from(new Set(values)).sort();
+      els.person.innerHTML = "";
+      (list || []).forEach(value => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        els.person.appendChild(option);
+      });
+      if (previous && Array.from(els.person.options).some(option => option.value === previous)) {
+        els.person.value = previous;
+      }
+      render();
+    }
+
+    function fillCourseWeek() {
+      if (!state.doc) return;
+      fillSelect(els.course, "Все курсы", state.doc.Courses || []);
+      fillSelect(els.week, "Все недели", state.doc.WeekTypes || []);
+    }
+
+    function fillSelect(select, allText, values) {
+      const previous = select.value;
+      select.innerHTML = "";
+      const all = document.createElement("option");
+      all.value = "";
+      all.textContent = allText;
+      select.appendChild(all);
+      (values || []).forEach(value => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+      if (previous && Array.from(select.options).some(option => option.value === previous)) {
+        select.value = previous;
+      }
+    }
+
+    function fillDates() {
+      if (!state.doc) return;
+      const previous = els.date.value;
+      const dates = new Map();
+      lessonsForCourseAndWeek().forEach(lesson => {
+        if (lesson.Date) dates.set(lesson.Date, `${lesson.Date} ${lesson.DayName || ""}`.trim());
+      });
+      els.date.innerHTML = '<option value="">Все даты</option>';
+      Array.from(dates.keys()).sort().forEach(date => {
+        const option = document.createElement("option");
+        option.value = date;
+        option.textContent = dates.get(date);
+        els.date.appendChild(option);
+      });
+      if (previous && dates.has(previous)) els.date.value = previous;
+    }
+
+    function render() {
+      if (!state.doc) return;
+      const visible = getVisibleLessons();
+      els.metricLessons.textContent = String((state.doc.Lessons || []).length);
+      els.metricGroups.textContent = String((state.doc.Groups || []).length);
+      els.metricTeachers.textContent = String((state.doc.Teachers || []).length);
+      els.metricRemote.textContent = String((state.doc.Lessons || []).filter(x => x.IsRemote).length);
+      renderCurrent(visible);
+      renderLessons(visible);
+      renderNotes(visible);
+    }
+
+    function getVisibleLessons() {
+      const selected = els.person.value;
+      const selectedDate = els.date.value;
+      const byTeacher = els.mode.value === "teacher";
+      return lessonsForCourseAndWeek().filter(lesson => {
+        const personOk = byTeacher ? lesson.Teacher === selected : lesson.Group === selected;
+        const dateOk = !selectedDate || lesson.Date === selectedDate;
+        return personOk && dateOk;
+      });
+    }
+
+    function lessonsForCourseAndWeek() {
+      const course = els.course.value;
+      const week = els.week.value;
+      return (state.doc.Lessons || []).filter(lesson => {
+        const courseOk = !course || lesson.Course === course;
+        const weekOk = !week || lesson.WeekType === week;
+        return courseOk && weekOk;
+      });
+    }
+
+    function renderCurrent(lessons) {
+      const current = lessons.find(isCurrentLesson);
+      if (!current) {
+        els.current.innerHTML = '<h2>Сейчас</h2><p>В выбранном расписании сейчас занятие не идет.</p>';
+        return;
+      }
+      const details = els.mode.value === "teacher"
+        ? `${current.Group || ""}, ${current.Subject || ""}, ${current.Room || ""}`
+        : `${current.Subject || ""}, ${current.Teacher || ""}, ${current.Room || ""}`;
+      els.current.innerHTML = `<h2>Сейчас идет ${escapeHtml(current.PairNumber)} пара</h2><p>${escapeHtml(current.TimeRange || "")} • ${escapeHtml(details)}</p>`;
+    }
+
+    function renderLessons(lessons) {
+      if (!lessons.length) {
+        els.lessons.innerHTML = '<div class="empty">Для выбранного фильтра занятий нет.</div>';
+        return;
+      }
+
+      els.lessons.innerHTML = lessons.map(lesson => {
+        const current = isCurrentLesson(lesson);
+        const color = lesson.ColorHex || (lesson.IsRemote ? "#2477c7" : "#0b6b6f");
+        const bg = lesson.ColorHex ? lighten(color, 0.9) : "";
+        const style = `border-left-color:${color};${bg ? "background:" + bg + ";" : ""}`;
+        const classes = ["lesson", lesson.IsRemote ? "remote" : "", current ? "is-current" : ""].join(" ");
+        return `<article class="${classes}" style="${style}">
+          <div class="lesson-top">
+            <h3 class="lesson-title">${escapeHtml(lesson.Subject || "Без названия")}</h3>
+            <span class="badge">${escapeHtml(lesson.IsRemote ? "Дистанционно" : (lesson.LessonType || "Занятие"))}</span>
+          </div>
+          <div class="meta">
+            <div><strong>Дата и время</strong>${escapeHtml((lesson.Date || "") + " " + (lesson.TimeRange || ""))}</div>
+            <div><strong>Курс и неделя</strong>${escapeHtml((lesson.Course || "Курс не указан") + ", " + (lesson.WeekType || "неделя не указана"))}</div>
+            <div><strong>Группа</strong>${escapeHtml((lesson.Group || "") + (lesson.Subgroup && lesson.Subgroup !== "Общая" ? ", " + lesson.Subgroup : ""))}</div>
+            <div><strong>Преподаватель</strong>${escapeHtml(lesson.Teacher || "Не указан")}</div>
+            <div><strong>Где</strong>${escapeHtml(lesson.Room || "Не указано")}</div>
+          </div>
+        </article>`;
+      }).join("");
+    }
+
+    function renderNotes(lessons) {
+      const lines = [];
+      lessons.filter(lesson => lesson.IsRemote && lesson.Teacher).forEach(lesson => {
+        const tool = (state.doc.DigitalTools || []).find(x => x.Teacher === lesson.Teacher);
+        const info = tool && tool.ConnectionInfo ? tool.ConnectionInfo : "код не указан";
+        const line = `${lesson.Teacher} - ${info}`;
+        if (!lines.includes(line)) lines.push(line);
+      });
+      if (!lines.length) {
+        els.notes.hidden = true;
+        els.notes.innerHTML = "";
+        return;
+      }
+      els.notes.hidden = false;
+      els.notes.innerHTML = "<strong>Коды подключения</strong><br>" + lines.map(escapeHtml).join("<br>");
+    }
+
+    function isCurrentLesson(lesson) {
+      if (!lesson.Date || !lesson.StartTime || !lesson.EndTime) return false;
+      const now = new Date();
+      const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      if (lesson.Date !== today) return false;
+      return timeToMinutes(lesson.StartTime) <= now.getHours() * 60 + now.getMinutes()
+        && now.getHours() * 60 + now.getMinutes() <= timeToMinutes(lesson.EndTime);
+    }
+
+    function timeToMinutes(value) {
+      const parts = String(value).split(":").map(Number);
+      return (parts[0] || 0) * 60 + (parts[1] || 0);
+    }
+
+    function base64ToBytes(value) {
+      const binary = atob(value);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+
+      return bytes;
+    }
+
+    function joinBytes() {
+      const parts = Array.from(arguments);
+      const length = parts.reduce((sum, part) => sum + part.length, 0);
+      const result = new Uint8Array(length);
+      let offset = 0;
+      parts.forEach(part => {
+        result.set(part, offset);
+        offset += part.length;
+      });
+      return result;
+    }
+
+    function sameBytes(left, right) {
+      if (!left || !right || left.length !== right.length) return false;
+      let diff = 0;
+      for (let i = 0; i < left.length; i++) {
+        diff |= left[i] ^ right[i];
+      }
+
+      return diff === 0;
+    }
+
+    function setStatus(text, isError) {
+      els.status.querySelector("span:last-child").textContent = text;
+      els.status.querySelector(".dot").style.background = isError ? "#f06f58" : "#0b6b6f";
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    function lighten(hex, amount) {
+      const clean = String(hex).replace("#", "");
+      if (clean.length !== 6) return "#ffffff";
+      const num = parseInt(clean, 16);
+      const r = Math.round(((num >> 16) & 255) + (255 - ((num >> 16) & 255)) * amount);
+      const g = Math.round(((num >> 8) & 255) + (255 - ((num >> 8) & 255)) * amount);
+      const b = Math.round((num & 255) + (255 - (num & 255)) * amount);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  </script>
+</body>
+</html>
