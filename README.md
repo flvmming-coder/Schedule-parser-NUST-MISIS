@@ -2,7 +2,7 @@
 
 Prototype package for the NUST MISIS Novotroitsk branch schedule parser.
 
-Current version: `0.4`.
+Current version: `0.4.1`.
 
 The repository contains two Windows 10 C# programs:
 

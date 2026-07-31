@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Fixed `ScheduleViewerApp` timeout when loading from the local server.
+- Replaced UI-thread-blocking `WebClient.DownloadStringAsync` usage with a direct `HttpWebRequest` loader.
+- Verified loading from a running local `ScheduleDepartmentApp` server on port `5088`.
+
 ## 0.4
 
 - Added course metadata to imported lessons and JSON.

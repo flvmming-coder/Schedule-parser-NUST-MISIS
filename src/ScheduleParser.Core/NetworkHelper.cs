@@ -3,7 +3,6 @@ using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
-using System.Threading;
 
 namespace ScheduleParser.Core
 {
@@ -111,44 +110,37 @@ namespace ScheduleParser.Core
 
         public static string DownloadStringWithTimeout(string url, int timeoutMilliseconds)
         {
-            using (WebClient client = new WebClient())
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.Method = "GET";
+            request.Accept = "application/json,text/plain,*/*";
+            request.UserAgent = AppInfo.ProductName + "/" + AppInfo.Version;
+            request.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
+            request.KeepAlive = false;
+            request.Timeout = timeoutMilliseconds;
+            request.ReadWriteTimeout = timeoutMilliseconds;
+            request.Proxy = null;
+
+            try
             {
-                client.Encoding = Encoding.UTF8;
-                client.Headers[HttpRequestHeader.CacheControl] = "no-cache";
-                ManualResetEvent done = new ManualResetEvent(false);
-                string result = null;
-                Exception error = null;
-
-                client.DownloadStringCompleted += delegate(object sender, DownloadStringCompletedEventArgs e)
+                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
+                using (Stream stream = response.GetResponseStream())
+                using (StreamReader reader = new StreamReader(stream, Encoding.UTF8, true))
                 {
-                    error = e.Error;
-                    if (!e.Cancelled && e.Error == null)
-                    {
-                        result = e.Result;
-                    }
-
-                    done.Set();
-                };
-
-                client.DownloadStringAsync(new Uri(url));
-                if (!done.WaitOne(timeoutMilliseconds))
+                    return reader.ReadToEnd();
+                }
+            }
+            catch (WebException ex)
+            {
+                if (ex.Status == WebExceptionStatus.Timeout)
                 {
-                    client.CancelAsync();
-                    throw new TimeoutException("Не удалось получить расписание: превышено время ожидания ответа сервера.");
+                    throw new TimeoutException("Не удалось получить расписание: превышено время ожидания ответа сервера.", ex);
                 }
 
-                if (error != null)
-                {
-                    WebException webException = error as WebException;
-                    if (webException != null)
-                    {
-                        throw new InvalidOperationException(BuildConnectionErrorMessage(url, webException), webException);
-                    }
-
-                    throw new InvalidOperationException("Не удалось загрузить расписание: " + error.Message, error);
-                }
-
-                return result;
+                throw new InvalidOperationException(BuildConnectionErrorMessage(url, ex), ex);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Не удалось загрузить расписание: " + ex.Message, ex);
             }
         }
 
