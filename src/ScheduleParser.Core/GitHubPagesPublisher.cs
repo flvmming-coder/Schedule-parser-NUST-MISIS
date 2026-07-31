@@ -50,7 +50,8 @@ namespace ScheduleParser.Core
                 string webRoot = ResolveWebRoot(webIndexPath);
                 string indexHtml = LoadWebHtml(webRoot, "index.html", protectBrowserAccess);
                 string scheduleHtml = LoadWebHtml(webRoot, "schedule.html", protectBrowserAccess);
-                string plainScheduleJson = ScheduleJsonSerializer.ToJson(document);
+                ScheduleDocument publicationDocument = SchedulePublicationHelper.PrepareForPublication(document);
+                string plainScheduleJson = ScheduleJsonSerializer.ToJson(publicationDocument);
                 string scheduleJson = protectBrowserAccess
                     ? BrowserScheduleProtector.ProtectJson(plainScheduleJson, browserPassword)
                     : plainScheduleJson;

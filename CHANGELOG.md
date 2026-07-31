@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.4
+
+- Fixed stale global publication: schedule JSON now carries a heartbeat timestamp.
+- The web schedule page now hides stale global data and shows a schedule unavailable state instead.
+- The department server can start without loaded Excel files.
+- Local and global web pages now receive a valid unavailable schedule package when no files are loaded.
+- Global publication now prepares the same server package used by local access.
+- Added a separate administrator launcher.
+
 ## 0.5.3
 
 - Added automatic GitHub Pages synchronization while the department server is running.

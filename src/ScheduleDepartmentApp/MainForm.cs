@@ -261,7 +261,7 @@ namespace ScheduleDepartmentApp
             _startServerButton = new Button();
             _startServerButton.Text = "Запустить";
             _startServerButton.Width = 118;
-            _startServerButton.Enabled = false;
+            _startServerButton.Enabled = true;
             _startServerButton.Click += StartServerButtonClick;
             UiTheme.StyleButton(_startServerButton, true);
             controls.Controls.Add(_startServerButton);
@@ -320,7 +320,7 @@ namespace ScheduleDepartmentApp
             _publishGlobalButton = new Button();
             _publishGlobalButton.Text = "Опубликовать в интернет";
             _publishGlobalButton.Width = 176;
-            _publishGlobalButton.Enabled = false;
+            _publishGlobalButton.Enabled = true;
             _publishGlobalButton.Click += PublishGlobalButtonClick;
             UiTheme.StyleButton(_publishGlobalButton, true);
             globalPanel.Controls.Add(_publishGlobalButton);
@@ -538,10 +538,10 @@ namespace ScheduleDepartmentApp
             _manageFilesButton.Enabled = false;
             _saveButton.Enabled = false;
             _clearButton.Enabled = false;
-            _startServerButton.Enabled = false;
+            _startServerButton.Enabled = true;
             _stopServerButton.Enabled = false;
             _openWebButton.Enabled = false;
-            _publishGlobalButton.Enabled = false;
+            _publishGlobalButton.Enabled = true;
             _globalUrlTextBox.Text = "Глобальная ссылка появится после публикации.";
 
             if (!deleteJson)
@@ -586,12 +586,6 @@ namespace ScheduleDepartmentApp
 
         private void StartServerButtonClick(object sender, EventArgs e)
         {
-            if (_document == null)
-            {
-                MessageBox.Show(this, "Сначала импортируйте Excel-расписание.", "Нет данных", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
             try
             {
                 StartServer();
@@ -613,7 +607,11 @@ namespace ScheduleDepartmentApp
             _serverStateLabel.ForeColor = UiTheme.Accent;
             _serverStateLabel.Text = "Сервер работает на порту " + _server.Port.ToString();
             _serverUrlsTextBox.Text = BuildServerUrlsText();
-            if (NetworkHelper.IsNetworkAvailable())
+            if (_document == null)
+            {
+                SetStatus("Сервер запущен без расписания. На сайте будет показано предупреждение о недоступности.");
+            }
+            else if (NetworkHelper.IsNetworkAvailable())
             {
                 SetStatus("Расписание опубликовано как веб-страница и JSON API.");
             }
@@ -629,7 +627,7 @@ namespace ScheduleDepartmentApp
         {
             StopGlobalAutoPublishLoop();
             _server.Stop();
-            _startServerButton.Enabled = _document != null;
+            _startServerButton.Enabled = true;
             _stopServerButton.Enabled = false;
             _openWebButton.Enabled = false;
             _serverStateLabel.ForeColor = UiTheme.Muted;
@@ -640,12 +638,6 @@ namespace ScheduleDepartmentApp
 
         private void PublishGlobalButtonClick(object sender, EventArgs e)
         {
-            if (_document == null)
-            {
-                MessageBox.Show(this, "Сначала импортируйте Excel-расписание.", "Нет данных", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
             try
             {
                 Cursor = Cursors.WaitCursor;
@@ -694,13 +686,13 @@ namespace ScheduleDepartmentApp
             GitHubPagesPublisher publisher = new GitHubPagesPublisher("flvmming-coder", "Schedule-parser-NUST-MISIS", "gh-pages");
             bool protectBrowserAccess = _protectedGlobalCheckBox.Checked;
             string browserPassword = GetBrowserPassword();
-            return publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text, protectBrowserAccess, browserPassword);
+            return publisher.Publish(GetPublicationDocument(), webIndexPath, _githubTokenTextBox.Text, protectBrowserAccess, browserPassword);
         }
 
         private void StartGlobalAutoPublishLoop()
         {
             _globalAutoPublishTimer.Stop();
-            if (!_autoGlobalPublishCheckBox.Checked || _document == null)
+            if (!_autoGlobalPublishCheckBox.Checked)
             {
                 return;
             }
@@ -721,7 +713,7 @@ namespace ScheduleDepartmentApp
 
         private void QueueGlobalAutoPublish(string reason)
         {
-            if (!_autoGlobalPublishCheckBox.Checked || !_server.IsRunning || _document == null || _globalPublishInProgress)
+            if (!_autoGlobalPublishCheckBox.Checked || !_server.IsRunning || _globalPublishInProgress)
             {
                 return;
             }
@@ -730,7 +722,7 @@ namespace ScheduleDepartmentApp
             SaveToPublicationPath();
 
             GlobalPublishRequest request = new GlobalPublishRequest();
-            request.Document = _document;
+            request.Document = GetPublicationDocument();
             request.WebIndexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
             request.GitHubToken = _githubTokenTextBox.Text;
             request.ProtectBrowserAccess = _protectedGlobalCheckBox.Checked;
@@ -843,12 +835,12 @@ namespace ScheduleDepartmentApp
 
         private void SaveToPublicationPath()
         {
-            if (_document == null)
-            {
-                return;
-            }
+            ScheduleJsonSerializer.Save(GetPublicationDocument(), _jsonPathTextBox.Text);
+        }
 
-            ScheduleJsonSerializer.Save(_document, _jsonPathTextBox.Text);
+        private ScheduleDocument GetPublicationDocument()
+        {
+            return SchedulePublicationHelper.PrepareForPublication(_document);
         }
 
         private void SetLoadedFilesText()

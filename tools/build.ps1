@@ -14,10 +14,12 @@ if (-not (Test-Path -LiteralPath $bin)) {
 
 $coreSources = Get-ChildItem -LiteralPath (Join-Path $root 'src\ScheduleParser.Core') -Filter '*.cs' | ForEach-Object { $_.FullName }
 $departmentSources = Get-ChildItem -LiteralPath (Join-Path $root 'src\ScheduleDepartmentApp') -Filter '*.cs' | ForEach-Object { $_.FullName }
+$adminSources = Get-ChildItem -LiteralPath (Join-Path $root 'src\ScheduleAdminApp') -Filter '*.cs' | ForEach-Object { $_.FullName }
 $viewerSources = Get-ChildItem -LiteralPath (Join-Path $root 'src\ScheduleViewerApp') -Filter '*.cs' | ForEach-Object { $_.FullName }
 
 $coreDll = Join-Path $bin 'ScheduleParser.Core.dll'
 $departmentExe = Join-Path $bin 'ScheduleDepartmentApp.exe'
+$adminExe = Join-Path $bin 'ScheduleAdminApp.exe'
 $viewerExe = Join-Path $bin 'ScheduleViewerApp.exe'
 $webSource = Join-Path $root 'web'
 $webTarget = Join-Path $bin 'web'
@@ -45,6 +47,18 @@ if ($LASTEXITCODE -ne 0) { throw "Core build failed with exit code $LASTEXITCODE
     $departmentSources
 if ($LASTEXITCODE -ne 0) { throw "Department app build failed with exit code $LASTEXITCODE." }
 
+if ($adminSources -and $adminSources.Count -gt 0) {
+    & $csc /nologo /codepage:65001 /target:winexe /out:$adminExe `
+        /reference:System.dll `
+        /reference:System.Core.dll `
+        /reference:System.Drawing.dll `
+        /reference:System.Windows.Forms.dll `
+        /reference:$coreDll `
+        /reference:$departmentExe `
+        $adminSources
+    if ($LASTEXITCODE -ne 0) { throw "Admin app build failed with exit code $LASTEXITCODE." }
+}
+
 & $csc /nologo /codepage:65001 /target:winexe /out:$viewerExe `
     /reference:System.dll `
     /reference:System.Core.dll `
@@ -69,4 +83,7 @@ if (Test-Path -LiteralPath $webSource) {
 
 Write-Host "Built:"
 Write-Host "  $departmentExe"
+if (Test-Path -LiteralPath $adminExe) {
+    Write-Host "  $adminExe"
+}
 Write-Host "  $viewerExe"

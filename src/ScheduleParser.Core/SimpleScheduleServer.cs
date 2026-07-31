@@ -215,13 +215,7 @@ namespace ScheduleParser.Core
 
             if (path == "/schedule.json" || path == "/api/schedule")
             {
-                if (!File.Exists(_jsonPath))
-                {
-                    WriteText(stream, 404, "Расписание еще не опубликовано.", headOnly);
-                    return;
-                }
-
-                byte[] bytes = File.ReadAllBytes(_jsonPath);
+                byte[] bytes = Encoding.UTF8.GetBytes(BuildScheduleJsonResponse());
                 WriteResponse(stream, 200, "application/json; charset=utf-8", bytes, headOnly);
                 return;
             }
@@ -240,6 +234,26 @@ namespace ScheduleParser.Core
             }
 
             WriteText(stream, 404, "Не найдено.", headOnly);
+        }
+
+        private string BuildScheduleJsonResponse()
+        {
+            if (string.IsNullOrWhiteSpace(_jsonPath) || !File.Exists(_jsonPath))
+            {
+                return ScheduleJsonSerializer.ToJson(SchedulePublicationHelper.CreateUnavailableDocument(SchedulePublicationHelper.DefaultUnavailableMessage));
+            }
+
+            string text = File.ReadAllText(_jsonPath, Encoding.UTF8);
+            try
+            {
+                ScheduleDocument document = ScheduleJsonSerializer.FromJson(text);
+                document = SchedulePublicationHelper.RefreshHeartbeat(document);
+                return ScheduleJsonSerializer.ToJson(document);
+            }
+            catch
+            {
+                return text;
+            }
         }
 
         private static string ExtractPath(string target)

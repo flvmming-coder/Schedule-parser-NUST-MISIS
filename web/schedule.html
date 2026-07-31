@@ -380,6 +380,7 @@
     const accessProtected = "{{ACCESS_PROTECTED}}" === "true";
     const passwordKey = "nust-misis-schedule-password";
     const refreshIntervalMs = 300000;
+    const staleAfterMs = 600000;
     const state = { doc: null, password: sessionStorage.getItem(passwordKey) || "", refreshTimer: 0 };
     const els = {
       status: document.getElementById("status"),
@@ -430,6 +431,15 @@
         if (!response.ok) throw new Error("Сервер вернул статус " + response.status);
         const payload = JSON.parse(await response.text());
         state.doc = await openSchedulePayload(payload);
+        if (!isScheduleAvailable(state.doc)) {
+          renderUnavailable(state.doc && state.doc.UnavailableMessage ? state.doc.UnavailableMessage : "Расписание сейчас недоступно.");
+          return true;
+        }
+        if (isHeartbeatStale(state.doc)) {
+          renderUnavailable("Нет связи с сервером учебного отдела. Расписание временно недоступно.");
+          return true;
+        }
+
         fillCourseWeek();
         fillPeople();
         fillDates();
@@ -451,18 +461,35 @@
     }
 
     function markScheduleUnavailable(message) {
+      renderUnavailable("Пакеты от сервера не пришли. Расписание временно недоступно.");
+    }
+
+    function renderUnavailable(message) {
       const checkedAt = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
       setStatus("Нет связи с расписанием • последняя попытка " + checkedAt, true);
-      els.current.innerHTML = '<h2>Нет связи</h2><p>Следующая автоматическая проверка будет через 5 минут.</p>';
-      els.lessons.innerHTML = '<div class="empty">Пакеты от сервера не пришли. Расписание временно недоступно.</div>';
+      els.current.innerHTML = '<h2>Расписание недоступно</h2><p>Следующая автоматическая проверка будет через 5 минут.</p>';
+      els.lessons.innerHTML = '<div class="empty">' + escapeHtml(message || "Расписание временно недоступно.") + '</div>';
       els.notes.hidden = true;
       els.notes.innerHTML = "";
-      if (!state.doc) {
-        els.metricLessons.textContent = "0";
-        els.metricGroups.textContent = "0";
-        els.metricTeachers.textContent = "0";
-        els.metricRemote.textContent = "0";
-      }
+      els.metricLessons.textContent = "0";
+      els.metricGroups.textContent = "0";
+      els.metricTeachers.textContent = "0";
+      els.metricRemote.textContent = "0";
+      els.course.innerHTML = '<option value="">Все курсы</option>';
+      els.week.innerHTML = '<option value="">Все недели</option>';
+      els.person.innerHTML = "";
+      els.date.innerHTML = '<option value="">Все даты</option>';
+    }
+
+    function isScheduleAvailable(document) {
+      return document && !document.UnavailableMessage && (document.Lessons || []).length > 0;
+    }
+
+    function isHeartbeatStale(document) {
+      if (!document || !document.HeartbeatAt) return false;
+      const heartbeat = new Date(document.HeartbeatAt);
+      if (Number.isNaN(heartbeat.getTime())) return false;
+      return Date.now() - heartbeat.getTime() > staleAfterMs;
     }
 
     async function openSchedulePayload(payload) {

@@ -19,6 +19,8 @@ namespace ScheduleParser.Core
         public string Title { get; set; }
         public string WeekLabel { get; set; }
         public string ParsedAt { get; set; }
+        public string HeartbeatAt { get; set; }
+        public string UnavailableMessage { get; set; }
         public List<string> SourceFiles { get; set; }
         public List<string> Courses { get; set; }
         public List<string> WeekTypes { get; set; }

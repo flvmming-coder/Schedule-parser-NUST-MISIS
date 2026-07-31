@@ -24,6 +24,9 @@ if (Test-Path -LiteralPath $staging) {
 
 New-Item -ItemType Directory -Path $staging | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'bin\ScheduleDepartmentApp.exe') -Destination $staging
+if (Test-Path -LiteralPath (Join-Path $root 'bin\ScheduleAdminApp.exe')) {
+    Copy-Item -LiteralPath (Join-Path $root 'bin\ScheduleAdminApp.exe') -Destination $staging
+}
 Copy-Item -LiteralPath (Join-Path $root 'bin\ScheduleViewerApp.exe') -Destination $staging
 Copy-Item -LiteralPath (Join-Path $root 'bin\ScheduleParser.Core.dll') -Destination $staging
 Copy-Item -LiteralPath (Join-Path $root 'bin\web') -Destination $staging -Recurse
