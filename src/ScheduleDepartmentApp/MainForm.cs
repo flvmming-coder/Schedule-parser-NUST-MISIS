@@ -351,11 +351,6 @@ namespace ScheduleDepartmentApp
 
             try
             {
-                if (!NetworkHelper.IsInternetAvailable())
-                {
-                    throw new InvalidOperationException("Нет подключения к интернету. По ТЗ сетевой режим должен показывать ошибку при отсутствии подключения.");
-                }
-
                 SaveToPublicationPath();
                 _server.Start(_portTextBox.Text, _jsonPathTextBox.Text);
                 _startServerButton.Enabled = false;
@@ -364,7 +359,14 @@ namespace ScheduleDepartmentApp
                 _serverStateLabel.ForeColor = UiTheme.Accent;
                 _serverStateLabel.Text = "Сервер работает на порту " + _server.Port.ToString();
                 _serverUrlsTextBox.Text = BuildServerUrlsText();
-                SetStatus("Расписание опубликовано как веб-страница и JSON API.");
+                if (NetworkHelper.IsNetworkAvailable())
+                {
+                    SetStatus("Расписание опубликовано как веб-страница и JSON API.");
+                }
+                else
+                {
+                    SetStatus("Сервер запущен локально. Для доступа с телефона подключите компьютер к сети.");
+                }
             }
             catch (Exception ex)
             {

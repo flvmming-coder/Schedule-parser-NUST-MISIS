@@ -247,12 +247,9 @@ namespace ScheduleViewerApp
             try
             {
                 Cursor = Cursors.WaitCursor;
-                if (!NetworkHelper.IsInternetAvailable())
-                {
-                    throw new InvalidOperationException("Нет подключения к интернету. Расписание по сети загрузить нельзя.");
-                }
-
-                string json = NetworkHelper.DownloadStringWithTimeout(_urlTextBox.Text, 8000);
+                string url = NetworkHelper.NormalizeScheduleJsonUrl(_urlTextBox.Text);
+                _urlTextBox.Text = url;
+                string json = NetworkHelper.DownloadStringWithTimeout(url, 8000);
                 LoadDocument(ScheduleJsonSerializer.FromJson(json), "Расписание загружено по сети.");
             }
             catch (Exception ex)

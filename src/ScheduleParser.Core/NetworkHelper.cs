@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Text;
 using System.Threading;
 
 namespace ScheduleParser.Core
@@ -38,11 +39,43 @@ namespace ScheduleParser.Core
             }
         }
 
+        public static string NormalizeScheduleJsonUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                throw new ArgumentException("Не указан URL сервера расписания.");
+            }
+
+            Uri uri;
+            if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out uri))
+            {
+                throw new ArgumentException("Некорректный URL сервера расписания.");
+            }
+
+            if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException("Поддерживаются только HTTP и HTTPS адреса.");
+            }
+
+            string path = uri.AbsolutePath;
+            if (string.IsNullOrWhiteSpace(path) || path == "/")
+            {
+                UriBuilder builder = new UriBuilder(uri);
+                builder.Path = "schedule.json";
+                builder.Query = string.Empty;
+                return builder.Uri.ToString();
+            }
+
+            return uri.ToString();
+        }
+
         public static string DownloadStringWithTimeout(string url, int timeoutMilliseconds)
         {
             using (WebClient client = new WebClient())
             {
-                client.Encoding = System.Text.Encoding.UTF8;
+                client.Encoding = Encoding.UTF8;
+                client.Headers[HttpRequestHeader.CacheControl] = "no-cache";
                 ManualResetEvent done = new ManualResetEvent(false);
                 string result = null;
                 Exception error = null;
@@ -62,16 +95,33 @@ namespace ScheduleParser.Core
                 if (!done.WaitOne(timeoutMilliseconds))
                 {
                     client.CancelAsync();
-                    throw new TimeoutException("Не удалось получить расписание: превышено время ожидания.");
+                    throw new TimeoutException("Не удалось получить расписание: превышено время ожидания ответа сервера.");
                 }
 
                 if (error != null)
                 {
-                    throw error;
+                    WebException webException = error as WebException;
+                    if (webException != null)
+                    {
+                        throw new InvalidOperationException(BuildConnectionErrorMessage(url, webException), webException);
+                    }
+
+                    throw new InvalidOperationException("Не удалось загрузить расписание: " + error.Message, error);
                 }
 
                 return result;
             }
+        }
+
+        private static string BuildConnectionErrorMessage(string url, WebException error)
+        {
+            HttpWebResponse response = error.Response as HttpWebResponse;
+            if (response != null)
+            {
+                return string.Format("Сервер расписания ответил ошибкой {0}. Проверьте адрес: {1}", (int)response.StatusCode, url);
+            }
+
+            return "Не удалось подключиться к серверу расписания. Проверьте, что сервер запущен, устройство находится в той же сети, а Windows Firewall разрешил доступ. URL: " + url;
         }
     }
 }

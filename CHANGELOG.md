@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Removed false blocking internet checks before server start and schedule loading.
+- The department app now starts the LAN server directly and reports real server/port problems instead.
+- The Windows viewer now tries the entered schedule URL first and shows server/URL errors instead of a generic "no internet" message.
+- The viewer accepts both `http://IP:5088/` and `http://IP:5088/schedule.json`.
+
 ## 0.2
 
 - Replaced the local-only `HttpListener` publication with a TCP HTTP server bound to all network interfaces.
