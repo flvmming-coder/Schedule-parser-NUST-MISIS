@@ -100,7 +100,7 @@ namespace ScheduleViewerApp
             _statusLabel.ForeColor = UiTheme.Muted;
             _statusLabel.Padding = new Padding(14, 0, 14, 0);
             _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-            _statusLabel.Text = "Сетевой просмотр требует доступного интернета и работающего сервера расписания.";
+            _statusLabel.Text = "Введите адрес сервера, например http://127.0.0.1:5088/, или откройте локальный JSON.";
             root.Controls.Add(_statusLabel, 0, 6);
         }
 
@@ -144,7 +144,7 @@ namespace ScheduleViewerApp
 
             _urlTextBox = new TextBox();
             _urlTextBox.Dock = DockStyle.Fill;
-            _urlTextBox.Text = "http://localhost:5088/schedule.json";
+            _urlTextBox.Text = "http://127.0.0.1:5088/";
             UiTheme.StyleTextBox(_urlTextBox);
             layout.Controls.Add(_urlTextBox, 1, 0);
 
@@ -249,8 +249,11 @@ namespace ScheduleViewerApp
                 Cursor = Cursors.WaitCursor;
                 string url = NetworkHelper.NormalizeScheduleJsonUrl(_urlTextBox.Text);
                 _urlTextBox.Text = url;
-                string json = NetworkHelper.DownloadStringWithTimeout(url, 8000);
-                LoadDocument(ScheduleJsonSerializer.FromJson(json), "Расписание загружено по сети.");
+                string json = NetworkHelper.LoadScheduleText(url, 8000);
+                string status = new Uri(url).Scheme == Uri.UriSchemeFile
+                    ? "Расписание открыто из локального JSON."
+                    : "Расписание загружено по сети.";
+                LoadDocument(ScheduleJsonSerializer.FromJson(json), status);
             }
             catch (Exception ex)
             {

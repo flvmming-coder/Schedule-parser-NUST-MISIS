@@ -2,7 +2,7 @@
 
 Prototype package for the NUST MISIS Novotroitsk branch schedule parser.
 
-Current version: `0.2.1`.
+Current version: `0.3`.
 
 The repository contains two Windows 10 C# programs:
 
@@ -60,6 +60,6 @@ Typical flow:
 5. On a phone or another Windows device in the same Wi-Fi/LAN network, open the web URL shown by the department app, for example `http://192.168.1.20:5088/`.
 6. For `ScheduleViewerApp`, use the JSON URL shown by the department app, for example `http://192.168.1.20:5088/schedule.json`.
 
-For network mode the apps now try the real server address directly. If the schedule is unavailable, the error points to the server URL, firewall, or local network instead of relying on an external internet check.
+For network mode the apps now try the real server address directly. The viewer accepts `http://127.0.0.1:5088/`, `http://localhost:5088/`, bare host addresses such as `localhost:5088`, `file://` URLs, and ordinary paths to local JSON files.
 
 If Windows Firewall asks for permission when the server starts, allow access on private networks.

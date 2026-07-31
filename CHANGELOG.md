@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3
+
+- Fixed `ScheduleViewerApp` loading from local server addresses.
+- The viewer now accepts `localhost`, `127.0.0.1`, bare host addresses without `http://`, root server URLs, `file://` URLs, and direct paths to local JSON files.
+- The local server now also attempts to listen on IPv6 so `localhost` works when Windows resolves it to `::1`.
+- The department app now shows `127.0.0.1` as the local URL to avoid localhost IPv6 ambiguity.
+
 ## 0.2.1
 
 - Removed false blocking internet checks before server start and schedule loading.

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
@@ -46,28 +47,66 @@ namespace ScheduleParser.Core
                 throw new ArgumentException("Не указан URL сервера расписания.");
             }
 
+            url = url.Trim().Trim('"');
+            if (IsExistingLocalFile(url))
+            {
+                return new Uri(Path.GetFullPath(url)).AbsoluteUri;
+            }
+
+            if (LooksLikeHostAddressWithoutScheme(url))
+            {
+                url = "http://" + url;
+            }
+
             Uri uri;
-            if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out uri))
+            if (!Uri.TryCreate(url, UriKind.Absolute, out uri))
             {
                 throw new ArgumentException("Некорректный URL сервера расписания.");
+            }
+
+            if (string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase))
+            {
+                return uri.AbsoluteUri;
             }
 
             if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             {
-                throw new ArgumentException("Поддерживаются только HTTP и HTTPS адреса.");
+                throw new ArgumentException("Поддерживаются HTTP, HTTPS, file:// и обычный путь к JSON-файлу.");
+            }
+
+            UriBuilder uriBuilder = new UriBuilder(uri);
+            if (string.Equals(uriBuilder.Host, "localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                uriBuilder.Host = "127.0.0.1";
             }
 
             string path = uri.AbsolutePath;
             if (string.IsNullOrWhiteSpace(path) || path == "/")
             {
-                UriBuilder builder = new UriBuilder(uri);
-                builder.Path = "schedule.json";
-                builder.Query = string.Empty;
-                return builder.Uri.ToString();
+                uriBuilder.Path = "schedule.json";
+                uriBuilder.Query = string.Empty;
             }
 
-            return uri.ToString();
+            return uriBuilder.Uri.ToString();
+        }
+
+        public static string LoadScheduleText(string source, int timeoutMilliseconds)
+        {
+            string normalized = NormalizeScheduleJsonUrl(source);
+            Uri uri = new Uri(normalized);
+            if (string.Equals(uri.Scheme, Uri.UriSchemeFile, StringComparison.OrdinalIgnoreCase))
+            {
+                string path = uri.LocalPath;
+                if (!File.Exists(path))
+                {
+                    throw new FileNotFoundException("JSON-файл расписания не найден.", path);
+                }
+
+                return File.ReadAllText(path, Encoding.UTF8);
+            }
+
+            return DownloadStringWithTimeout(normalized, timeoutMilliseconds);
         }
 
         public static string DownloadStringWithTimeout(string url, int timeoutMilliseconds)
@@ -122,6 +161,29 @@ namespace ScheduleParser.Core
             }
 
             return "Не удалось подключиться к серверу расписания. Проверьте, что сервер запущен, устройство находится в той же сети, а Windows Firewall разрешил доступ. URL: " + url;
+        }
+
+        private static bool IsExistingLocalFile(string value)
+        {
+            try
+            {
+                return File.Exists(value);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool LooksLikeHostAddressWithoutScheme(string value)
+        {
+            string lower = value.ToLowerInvariant();
+            return lower.StartsWith("localhost", StringComparison.Ordinal) ||
+                   lower.StartsWith("127.", StringComparison.Ordinal) ||
+                   lower.StartsWith("192.168.", StringComparison.Ordinal) ||
+                   lower.StartsWith("10.", StringComparison.Ordinal) ||
+                   lower.StartsWith("172.", StringComparison.Ordinal) ||
+                   lower.StartsWith("[::1]", StringComparison.Ordinal);
         }
     }
 }

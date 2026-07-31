@@ -10,10 +10,16 @@ namespace ScheduleParser.Core
 {
     public sealed class SimpleScheduleServer : IDisposable
     {
-        private TcpListener _listener;
-        private Thread _thread;
+        private readonly List<TcpListener> _listeners;
+        private readonly List<Thread> _threads;
         private volatile bool _running;
         private string _jsonPath;
+
+        public SimpleScheduleServer()
+        {
+            _listeners = new List<TcpListener>();
+            _threads = new List<Thread>();
+        }
 
         public string Prefix { get; private set; }
         public string LocalUrl { get; private set; }
@@ -40,17 +46,24 @@ namespace ScheduleParser.Core
             int port = ParsePort(addressOrPort);
             _jsonPath = jsonPath;
             Port = port;
-            LocalUrl = "http://localhost:" + port.ToString() + "/";
+            LocalUrl = "http://127.0.0.1:" + port.ToString() + "/";
             Prefix = LocalUrl;
             NetworkUrls = BuildNetworkUrls(port);
 
-            _listener = new TcpListener(IPAddress.Any, port);
-            _listener.Start();
+            _listeners.Clear();
+            _threads.Clear();
+            StartListener(new TcpListener(IPAddress.Any, port));
+            TryStartIpv6Listener(port);
+
             _running = true;
 
-            _thread = new Thread(ListenLoop);
-            _thread.IsBackground = true;
-            _thread.Start();
+            foreach (TcpListener listener in _listeners)
+            {
+                Thread thread = new Thread(ListenLoop);
+                thread.IsBackground = true;
+                thread.Start(listener);
+                _threads.Add(thread);
+            }
         }
 
         public void Stop()
@@ -58,9 +71,15 @@ namespace ScheduleParser.Core
             _running = false;
             try
             {
-                if (_listener != null)
+                foreach (TcpListener listener in _listeners)
                 {
-                    _listener.Stop();
+                    try
+                    {
+                        listener.Stop();
+                    }
+                    catch
+                    {
+                    }
                 }
             }
             catch
@@ -68,7 +87,8 @@ namespace ScheduleParser.Core
             }
             finally
             {
-                _listener = null;
+                _listeners.Clear();
+                _threads.Clear();
             }
         }
 
@@ -77,13 +97,19 @@ namespace ScheduleParser.Core
             Stop();
         }
 
-        private void ListenLoop()
+        private void ListenLoop(object state)
         {
+            TcpListener listener = state as TcpListener;
+            if (listener == null)
+            {
+                return;
+            }
+
             while (_running)
             {
                 try
                 {
-                    TcpClient client = _listener.AcceptTcpClient();
+                    TcpClient client = listener.AcceptTcpClient();
                     ThreadPool.QueueUserWorkItem(HandleClient, client);
                 }
                 catch
@@ -93,6 +119,25 @@ namespace ScheduleParser.Core
                         return;
                     }
                 }
+            }
+        }
+
+        private void StartListener(TcpListener listener)
+        {
+            listener.Start();
+            _listeners.Add(listener);
+        }
+
+        private void TryStartIpv6Listener(int port)
+        {
+            try
+            {
+                TcpListener ipv6 = new TcpListener(IPAddress.IPv6Any, port);
+                ipv6.Server.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, true);
+                StartListener(ipv6);
+            }
+            catch
+            {
             }
         }
 
