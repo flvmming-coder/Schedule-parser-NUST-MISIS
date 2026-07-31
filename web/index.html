@@ -85,7 +85,7 @@
 
     .toolbar {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 14px;
     }
@@ -229,7 +229,7 @@
 
     .meta {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 8px;
       color: var(--muted);
       font-size: 14px;
@@ -289,6 +289,12 @@
     <div id="status" class="status"><span class="dot"></span><span>Подключаюсь к серверу расписания...</span></div>
 
     <section class="toolbar" aria-label="Фильтры">
+      <label>Курс
+        <select id="course"></select>
+      </label>
+      <label>Неделя
+        <select id="week"></select>
+      </label>
       <label>Режим
         <select id="mode">
           <option value="group">Группа</option>
@@ -324,6 +330,8 @@
     const state = { doc: null };
     const els = {
       status: document.getElementById("status"),
+      course: document.getElementById("course"),
+      week: document.getElementById("week"),
       mode: document.getElementById("mode"),
       person: document.getElementById("person"),
       date: document.getElementById("date"),
@@ -338,6 +346,8 @@
     };
 
     els.reload.addEventListener("click", loadSchedule);
+    els.course.addEventListener("change", () => { fillPeople(); fillDates(); render(); });
+    els.week.addEventListener("change", () => { fillPeople(); fillDates(); render(); });
     els.mode.addEventListener("change", fillPeople);
     els.person.addEventListener("change", render);
     els.date.addEventListener("change", render);
@@ -351,6 +361,7 @@
         const response = await fetch("/schedule.json?ts=" + Date.now(), { cache: "no-store" });
         if (!response.ok) throw new Error("Сервер вернул статус " + response.status);
         state.doc = await response.json();
+        fillCourseWeek();
         fillPeople();
         fillDates();
         render();
@@ -365,7 +376,10 @@
     function fillPeople() {
       if (!state.doc) return;
       const previous = els.person.value;
-      const list = els.mode.value === "teacher" ? state.doc.Teachers : state.doc.Groups;
+      const lessons = lessonsForCourseAndWeek();
+      const values = lessons.map(lesson => els.mode.value === "teacher" ? lesson.Teacher : lesson.Group)
+        .filter(Boolean);
+      const list = Array.from(new Set(values)).sort();
       els.person.innerHTML = "";
       (list || []).forEach(value => {
         const option = document.createElement("option");
@@ -379,11 +393,35 @@
       render();
     }
 
+    function fillCourseWeek() {
+      if (!state.doc) return;
+      fillSelect(els.course, "Все курсы", state.doc.Courses || []);
+      fillSelect(els.week, "Все недели", state.doc.WeekTypes || []);
+    }
+
+    function fillSelect(select, allText, values) {
+      const previous = select.value;
+      select.innerHTML = "";
+      const all = document.createElement("option");
+      all.value = "";
+      all.textContent = allText;
+      select.appendChild(all);
+      (values || []).forEach(value => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+      if (previous && Array.from(select.options).some(option => option.value === previous)) {
+        select.value = previous;
+      }
+    }
+
     function fillDates() {
       if (!state.doc) return;
       const previous = els.date.value;
       const dates = new Map();
-      (state.doc.Lessons || []).forEach(lesson => {
+      lessonsForCourseAndWeek().forEach(lesson => {
         if (lesson.Date) dates.set(lesson.Date, `${lesson.Date} ${lesson.DayName || ""}`.trim());
       });
       els.date.innerHTML = '<option value="">Все даты</option>';
@@ -412,10 +450,20 @@
       const selected = els.person.value;
       const selectedDate = els.date.value;
       const byTeacher = els.mode.value === "teacher";
-      return (state.doc.Lessons || []).filter(lesson => {
+      return lessonsForCourseAndWeek().filter(lesson => {
         const personOk = byTeacher ? lesson.Teacher === selected : lesson.Group === selected;
         const dateOk = !selectedDate || lesson.Date === selectedDate;
         return personOk && dateOk;
+      });
+    }
+
+    function lessonsForCourseAndWeek() {
+      const course = els.course.value;
+      const week = els.week.value;
+      return (state.doc.Lessons || []).filter(lesson => {
+        const courseOk = !course || lesson.Course === course;
+        const weekOk = !week || lesson.WeekType === week;
+        return courseOk && weekOk;
       });
     }
 
@@ -450,6 +498,7 @@
           </div>
           <div class="meta">
             <div><strong>Дата и время</strong>${escapeHtml((lesson.Date || "") + " " + (lesson.TimeRange || ""))}</div>
+            <div><strong>Курс и неделя</strong>${escapeHtml((lesson.Course || "Курс не указан") + ", " + (lesson.WeekType || "неделя не указана"))}</div>
             <div><strong>Группа</strong>${escapeHtml((lesson.Group || "") + (lesson.Subgroup && lesson.Subgroup !== "Общая" ? ", " + lesson.Subgroup : ""))}</div>
             <div><strong>Преподаватель</strong>${escapeHtml(lesson.Teacher || "Не указан")}</div>
             <div><strong>Где</strong>${escapeHtml(lesson.Room || "Не указано")}</div>

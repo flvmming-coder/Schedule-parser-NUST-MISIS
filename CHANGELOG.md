@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4
+
+- Added course metadata to imported lessons and JSON.
+- Added week type metadata (`Четная`, `Нечетная`, `Не указана`) to imported lessons and JSON.
+- Added course selection before import in the department app.
+- Added current schedule cleanup: stops the server, clears the grid, and deletes the published JSON.
+- Importing new Excel files while the server is running now restarts the server with the new schedule.
+- Added course and week filters to the Windows viewer and built-in web viewer.
+- Hardened viewer filtering so loaded schedules are displayed after course/week filtering.
+
 ## 0.3
 
 - Fixed `ScheduleViewerApp` loading from local server addresses.

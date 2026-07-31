@@ -7,6 +7,8 @@ namespace ScheduleParser.Core
     {
         public ScheduleDocument()
         {
+            Courses = new List<string>();
+            WeekTypes = new List<string>();
             Groups = new List<string>();
             Teachers = new List<string>();
             Lessons = new List<Lesson>();
@@ -18,6 +20,8 @@ namespace ScheduleParser.Core
         public string WeekLabel { get; set; }
         public string ParsedAt { get; set; }
         public List<string> SourceFiles { get; set; }
+        public List<string> Courses { get; set; }
+        public List<string> WeekTypes { get; set; }
         public List<string> Groups { get; set; }
         public List<string> Teachers { get; set; }
         public List<Lesson> Lessons { get; set; }
@@ -27,6 +31,8 @@ namespace ScheduleParser.Core
     public sealed class Lesson
     {
         public string Id { get; set; }
+        public string Course { get; set; }
+        public string WeekType { get; set; }
         public string Group { get; set; }
         public string Subgroup { get; set; }
         public string Date { get; set; }

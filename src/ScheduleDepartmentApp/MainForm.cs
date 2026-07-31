@@ -20,6 +20,8 @@ namespace ScheduleDepartmentApp
         private Label _statusLabel;
         private Label _serverStateLabel;
         private DataGridView _grid;
+        private CheckBox[] _courseCheckBoxes;
+        private Button _clearButton;
         private Button _saveButton;
         private Button _startServerButton;
         private Button _stopServerButton;
@@ -98,15 +100,16 @@ namespace ScheduleDepartmentApp
         {
             Panel panel = new Panel();
             panel.Dock = DockStyle.Top;
-            panel.Height = 118;
+            panel.Height = 150;
             panel.Padding = new Padding(14);
             panel.BackColor = UiTheme.Background;
 
             TableLayoutPanel layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
             layout.ColumnCount = 1;
-            layout.RowCount = 3;
+            layout.RowCount = 4;
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
             panel.Controls.Add(layout);
@@ -132,6 +135,14 @@ namespace ScheduleDepartmentApp
             UiTheme.StyleButton(_saveButton, false);
             actions.Controls.Add(_saveButton);
 
+            _clearButton = new Button();
+            _clearButton.Text = "Очистить";
+            _clearButton.Width = 110;
+            _clearButton.Enabled = false;
+            _clearButton.Click += ClearButtonClick;
+            UiTheme.StyleButton(_clearButton, false);
+            actions.Controls.Add(_clearButton);
+
             Label jsonLabel = CreateSmallLabel("Файл публикации");
             jsonLabel.Width = 120;
             actions.Controls.Add(jsonLabel);
@@ -142,19 +153,42 @@ namespace ScheduleDepartmentApp
             UiTheme.StyleTextBox(_jsonPathTextBox);
             actions.Controls.Add(_jsonPathTextBox);
 
+            FlowLayoutPanel courses = new FlowLayoutPanel();
+            courses.Dock = DockStyle.Fill;
+            courses.WrapContents = false;
+            courses.BackColor = UiTheme.Background;
+            layout.Controls.Add(courses, 0, 1);
+
+            Label courseLabel = CreateSmallLabel("Курсы для загрузки");
+            courseLabel.Width = 132;
+            courses.Controls.Add(courseLabel);
+
+            _courseCheckBoxes = new CheckBox[6];
+            for (int i = 0; i < _courseCheckBoxes.Length; i++)
+            {
+                CheckBox checkBox = new CheckBox();
+                checkBox.Text = (i + 1).ToString() + " курс";
+                checkBox.Width = 78;
+                checkBox.Height = 28;
+                checkBox.Checked = true;
+                checkBox.ForeColor = UiTheme.Text;
+                _courseCheckBoxes[i] = checkBox;
+                courses.Controls.Add(checkBox);
+            }
+
             _filesTextBox = new TextBox();
             _filesTextBox.Dock = DockStyle.Fill;
             _filesTextBox.ReadOnly = true;
             _filesTextBox.Text = "Файлы Excel пока не выбраны";
             UiTheme.StyleTextBox(_filesTextBox);
-            layout.Controls.Add(_filesTextBox, 0, 1);
+            layout.Controls.Add(_filesTextBox, 0, 2);
 
             _statusLabel = new Label();
             _statusLabel.Dock = DockStyle.Fill;
             _statusLabel.Text = "Выберите Excel-файл расписания. После импорта можно запустить сетевой сервер.";
             _statusLabel.ForeColor = UiTheme.Muted;
             _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-            layout.Controls.Add(_statusLabel, 0, 2);
+            layout.Controls.Add(_statusLabel, 0, 3);
 
             return panel;
         }
@@ -262,6 +296,8 @@ namespace ScheduleDepartmentApp
         private static void ConfigureGrid(DataGridView grid)
         {
             AddColumn(grid, "Date", "Дата", 90);
+            AddColumn(grid, "Course", "Курс", 80);
+            AddColumn(grid, "WeekType", "Неделя", 90);
             AddColumn(grid, "DayName", "День", 105);
             AddColumn(grid, "PairNumber", "№", 45);
             AddColumn(grid, "TimeRange", "Время", 100);
@@ -298,14 +334,38 @@ namespace ScheduleDepartmentApp
 
                 try
                 {
+                    int[] selectedCourses = GetSelectedCourses();
+                    if (selectedCourses.Length == 0)
+                    {
+                        MessageBox.Show(this, "Выберите хотя бы один курс для загрузки.", "Курсы не выбраны", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+
+                    bool restartServer = _server.IsRunning;
+                    if (restartServer)
+                    {
+                        _server.Stop();
+                    }
+
                     Cursor = Cursors.WaitCursor;
-                    _document = _parser.ParseFiles(dialog.FileNames);
+                    _document = _parser.ParseFiles(dialog.FileNames, selectedCourses);
+                    if (_document.Lessons.Count == 0)
+                    {
+                        throw new InvalidOperationException("В выбранных файлах не найдено занятий для отмеченных курсов.");
+                    }
+
                     _filesTextBox.Text = string.Join("; ", dialog.FileNames);
                     BindLessons();
                     SaveToPublicationPath();
-                    SetStatus(string.Format("Готово: {0} занятий, {1} групп, {2} преподавателей. Данные подготовлены для сети.", _document.Lessons.Count, _document.Groups.Count, _document.Teachers.Count));
+                    SetStatus(string.Format("Готово: {0} занятий, курсы: {1}, недели: {2}, групп: {3}, преподавателей: {4}.", _document.Lessons.Count, JoinList(_document.Courses), JoinList(_document.WeekTypes), _document.Groups.Count, _document.Teachers.Count));
                     _saveButton.Enabled = true;
+                    _clearButton.Enabled = true;
                     _startServerButton.Enabled = true;
+                    if (restartServer)
+                    {
+                        StartServer();
+                        SetStatus("Расписание обновлено, сервер перезапущен с новыми файлами.");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -317,6 +377,42 @@ namespace ScheduleDepartmentApp
                     Cursor = Cursors.Default;
                 }
             }
+        }
+
+        private void ClearButtonClick(object sender, EventArgs e)
+        {
+            DialogResult result = MessageBox.Show(this, "Очистить текущее расписание, остановить сервер и удалить опубликованный JSON?", "Очистка расписания", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result != DialogResult.Yes)
+            {
+                return;
+            }
+
+            _server.Stop();
+            _document = null;
+            _grid.DataSource = new List<Lesson>();
+            _filesTextBox.Text = "Файлы Excel пока не выбраны";
+            _serverStateLabel.ForeColor = UiTheme.Muted;
+            _serverStateLabel.Text = "Сервер остановлен";
+            _serverUrlsTextBox.Text = "Ссылки появятся после запуска сервера.";
+            _saveButton.Enabled = false;
+            _clearButton.Enabled = false;
+            _startServerButton.Enabled = false;
+            _stopServerButton.Enabled = false;
+            _openWebButton.Enabled = false;
+
+            try
+            {
+                if (File.Exists(_jsonPathTextBox.Text))
+                {
+                    File.Delete(_jsonPathTextBox.Text);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Не удалось удалить JSON", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+
+            SetStatus("Текущее расписание очищено. Можно загрузить новые файлы.");
         }
 
         private void SaveButtonClick(object sender, EventArgs e)
@@ -351,27 +447,32 @@ namespace ScheduleDepartmentApp
 
             try
             {
-                SaveToPublicationPath();
-                _server.Start(_portTextBox.Text, _jsonPathTextBox.Text);
-                _startServerButton.Enabled = false;
-                _stopServerButton.Enabled = true;
-                _openWebButton.Enabled = true;
-                _serverStateLabel.ForeColor = UiTheme.Accent;
-                _serverStateLabel.Text = "Сервер работает на порту " + _server.Port.ToString();
-                _serverUrlsTextBox.Text = BuildServerUrlsText();
-                if (NetworkHelper.IsNetworkAvailable())
-                {
-                    SetStatus("Расписание опубликовано как веб-страница и JSON API.");
-                }
-                else
-                {
-                    SetStatus("Сервер запущен локально. Для доступа с телефона подключите компьютер к сети.");
-                }
+                StartServer();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Ошибка запуска сервера", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 SetStatus("Сервер не запущен.");
+            }
+        }
+
+        private void StartServer()
+        {
+            SaveToPublicationPath();
+            _server.Start(_portTextBox.Text, _jsonPathTextBox.Text);
+            _startServerButton.Enabled = false;
+            _stopServerButton.Enabled = true;
+            _openWebButton.Enabled = true;
+            _serverStateLabel.ForeColor = UiTheme.Accent;
+            _serverStateLabel.Text = "Сервер работает на порту " + _server.Port.ToString();
+            _serverUrlsTextBox.Text = BuildServerUrlsText();
+            if (NetworkHelper.IsNetworkAvailable())
+            {
+                SetStatus("Расписание опубликовано как веб-страница и JSON API.");
+            }
+            else
+            {
+                SetStatus("Сервер запущен локально. Для доступа с телефона подключите компьютер к сети.");
             }
         }
 
@@ -447,6 +548,35 @@ namespace ScheduleDepartmentApp
             }
 
             ScheduleJsonSerializer.Save(_document, _jsonPathTextBox.Text);
+        }
+
+        private int[] GetSelectedCourses()
+        {
+            List<int> selected = new List<int>();
+            if (_courseCheckBoxes == null)
+            {
+                return selected.ToArray();
+            }
+
+            for (int i = 0; i < _courseCheckBoxes.Length; i++)
+            {
+                if (_courseCheckBoxes[i].Checked)
+                {
+                    selected.Add(i + 1);
+                }
+            }
+
+            return selected.ToArray();
+        }
+
+        private static string JoinList(List<string> values)
+        {
+            if (values == null || values.Count == 0)
+            {
+                return "не указано";
+            }
+
+            return string.Join(", ", values.ToArray());
         }
 
         private void BindLessons()

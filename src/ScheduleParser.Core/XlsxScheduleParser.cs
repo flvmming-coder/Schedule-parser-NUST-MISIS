@@ -50,15 +50,27 @@ namespace ScheduleParser.Core
 
         public ScheduleDocument ParseFiles(IEnumerable<string> paths)
         {
+            return ParseFiles(paths, null);
+        }
+
+        public ScheduleDocument ParseFiles(IEnumerable<string> paths, IEnumerable<int> selectedCourseNumbers)
+        {
             ScheduleDocument combined = new ScheduleDocument();
             combined.Title = "Расписание НФ НИТУ МИСИС";
             combined.ParsedAt = DateTime.Now.ToString("s", CultureInfo.InvariantCulture);
 
             HashSet<string> lessonSignatures = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<int> selectedCourses = BuildCourseNumberSet(selectedCourseNumbers);
 
             foreach (string path in paths)
             {
                 ScheduleDocument document = ParseFile(path);
+                ApplyCourseSelectionFallback(document, selectedCourses);
+                if (!DocumentMatchesSelectedCourses(document, selectedCourses))
+                {
+                    continue;
+                }
+
                 if (string.IsNullOrWhiteSpace(combined.WeekLabel))
                 {
                     combined.WeekLabel = document.WeekLabel;
@@ -78,6 +90,8 @@ namespace ScheduleParser.Core
                 {
                     string signature = string.Join("|", new string[]
                     {
+                        lesson.Course,
+                        lesson.WeekType,
                         lesson.Group,
                         lesson.Subgroup,
                         lesson.Date,
@@ -115,6 +129,8 @@ namespace ScheduleParser.Core
 
             string weekLabel = Clean(sheet.GetTextRaw(1, 1));
             string title = Clean(sheet.GetTextRaw(2, 1));
+            string weekType = NormalizeWeekType(weekLabel);
+            string course = DetectCourse(path, title);
             if (!string.IsNullOrWhiteSpace(weekLabel) && string.IsNullOrWhiteSpace(document.WeekLabel))
             {
                 document.WeekLabel = weekLabel;
@@ -175,6 +191,8 @@ namespace ScheduleParser.Core
                     ParsedLessonText parsed = ParseLessonText(rawLesson);
                     Lesson lesson = new Lesson();
                     lesson.Id = BuildLessonId(Path.GetFileName(path), sheet.Name, row, column.SubjectColumn);
+                    lesson.Course = course;
+                    lesson.WeekType = weekType;
                     lesson.Group = column.Group;
                     lesson.Subgroup = column.Subgroup;
                     lesson.Date = currentDate;
@@ -486,6 +504,126 @@ namespace ScheduleParser.Core
             return Math.Abs(raw.GetHashCode()).ToString("X8", CultureInfo.InvariantCulture);
         }
 
+        private static string NormalizeWeekType(string weekLabel)
+        {
+            string value = Clean(weekLabel).ToLowerInvariant();
+            if (value.IndexOf("нечет", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("нечёт", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Нечетная";
+            }
+
+            if (value.IndexOf("чет", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("чёт", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Четная";
+            }
+
+            return "Не указана";
+        }
+
+        private static string DetectCourse(string path, string title)
+        {
+            int number = DetectCourseNumber(Path.GetFileNameWithoutExtension(path));
+            if (number == 0)
+            {
+                number = DetectCourseNumber(title);
+            }
+
+            return number > 0 ? FormatCourse(number) : "Не указан";
+        }
+
+        private static int DetectCourseNumber(string text)
+        {
+            string value = Clean(text).ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return 0;
+            }
+
+            Match match = Regex.Match(value, @"(?:^|[^0-9])([1-6])\s*(?:k|к|курс|курса|курсе)(?:[^0-9]|$)", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+            }
+
+            return 0;
+        }
+
+        private static string FormatCourse(int courseNumber)
+        {
+            return courseNumber.ToString(CultureInfo.InvariantCulture) + " курс";
+        }
+
+        private static int CourseNumberFromLabel(string course)
+        {
+            Match match = Regex.Match(Clean(course), @"([1-6])");
+            return match.Success ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
+        }
+
+        private static HashSet<int> BuildCourseNumberSet(IEnumerable<int> selectedCourseNumbers)
+        {
+            HashSet<int> result = new HashSet<int>();
+            if (selectedCourseNumbers == null)
+            {
+                return result;
+            }
+
+            foreach (int course in selectedCourseNumbers)
+            {
+                if (course >= 1 && course <= 6)
+                {
+                    result.Add(course);
+                }
+            }
+
+            return result;
+        }
+
+        private static void ApplyCourseSelectionFallback(ScheduleDocument document, HashSet<int> selectedCourses)
+        {
+            if (document == null || selectedCourses == null || selectedCourses.Count != 1)
+            {
+                return;
+            }
+
+            bool hasKnownCourse = document.Lessons.Any(x => CourseNumberFromLabel(x.Course) > 0);
+            if (hasKnownCourse)
+            {
+                return;
+            }
+
+            string course = FormatCourse(selectedCourses.First());
+            foreach (Lesson lesson in document.Lessons)
+            {
+                lesson.Course = course;
+            }
+        }
+
+        private static bool DocumentMatchesSelectedCourses(ScheduleDocument document, HashSet<int> selectedCourses)
+        {
+            if (selectedCourses == null || selectedCourses.Count == 0)
+            {
+                return true;
+            }
+
+            bool hasKnownCourse = false;
+            foreach (Lesson lesson in document.Lessons)
+            {
+                int courseNumber = CourseNumberFromLabel(lesson.Course);
+                if (courseNumber > 0)
+                {
+                    hasKnownCourse = true;
+                    if (selectedCourses.Contains(courseNumber))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return !hasKnownCourse;
+        }
+
         private static string CleanLessonText(string text)
         {
             return Regex.Replace(Clean(text), @"\s+", " ").Trim();
@@ -505,9 +643,21 @@ namespace ScheduleParser.Core
         {
             HashSet<string> groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             HashSet<string> teachers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> courses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> weekTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (Lesson lesson in document.Lessons)
             {
+                if (!string.IsNullOrWhiteSpace(lesson.Course))
+                {
+                    courses.Add(lesson.Course);
+                }
+
+                if (!string.IsNullOrWhiteSpace(lesson.WeekType))
+                {
+                    weekTypes.Add(lesson.WeekType);
+                }
+
                 if (!string.IsNullOrWhiteSpace(lesson.Group))
                 {
                     groups.Add(lesson.Group);
@@ -527,14 +677,36 @@ namespace ScheduleParser.Core
                 }
             }
 
+            document.Courses = courses.OrderBy(CourseNumberFromLabel).ThenBy(x => x).ToList();
+            document.WeekTypes = weekTypes.OrderBy(WeekTypeSortKey).ThenBy(x => x).ToList();
             document.Groups = groups.OrderBy(x => x).ToList();
             document.Teachers = teachers.OrderBy(x => x).ToList();
             document.Lessons = document.Lessons
-                .OrderBy(x => x.Date)
+                .OrderBy(x => CourseNumberFromLabel(x.Course))
+                .ThenBy(x => WeekTypeSortKey(x.WeekType))
+                .ThenBy(x => x.Date)
                 .ThenBy(x => x.PairNumber)
                 .ThenBy(x => x.Group)
                 .ThenBy(x => x.Subgroup)
                 .ToList();
+        }
+
+        private static int WeekTypeSortKey(string weekType)
+        {
+            string value = Clean(weekType).ToLowerInvariant();
+            if (value.IndexOf("нечет", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("нечёт", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 2;
+            }
+
+            if (value.IndexOf("чет", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                value.IndexOf("чёт", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 1;
+            }
+
+            return 9;
         }
 
         private static void AddUnique(List<string> values, string value)

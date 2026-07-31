@@ -10,8 +10,14 @@ namespace ScheduleViewerApp
 {
     public sealed class MainForm : Form
     {
+        private const string AllCoursesText = "Все курсы";
+        private const string AllWeeksText = "Все недели";
+        private const string AllDatesText = "Все даты";
+
         private ScheduleDocument _document;
         private TextBox _urlTextBox;
+        private ComboBox _courseComboBox;
+        private ComboBox _weekComboBox;
         private ComboBox _modeComboBox;
         private ComboBox _filterComboBox;
         private ComboBox _dateComboBox;
@@ -19,6 +25,7 @@ namespace ScheduleViewerApp
         private Label _statusLabel;
         private DataGridView _grid;
         private TextBox _notesTextBox;
+        private bool _updatingFilters;
 
         public MainForm()
         {
@@ -174,12 +181,28 @@ namespace ScheduleViewerApp
 
             TableLayoutPanel layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
-            layout.ColumnCount = 3;
+            layout.ColumnCount = 5;
             layout.RowCount = 1;
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
             panel.Controls.Add(layout);
+
+            _courseComboBox = new ComboBox();
+            _courseComboBox.Dock = DockStyle.Fill;
+            _courseComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _courseComboBox.SelectedIndexChanged += FilterChanged;
+            UiTheme.StyleCombo(_courseComboBox);
+            layout.Controls.Add(_courseComboBox, 0, 0);
+
+            _weekComboBox = new ComboBox();
+            _weekComboBox.Dock = DockStyle.Fill;
+            _weekComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _weekComboBox.SelectedIndexChanged += FilterChanged;
+            UiTheme.StyleCombo(_weekComboBox);
+            layout.Controls.Add(_weekComboBox, 1, 0);
 
             _modeComboBox = new ComboBox();
             _modeComboBox.Dock = DockStyle.Fill;
@@ -189,21 +212,21 @@ namespace ScheduleViewerApp
             _modeComboBox.SelectedIndex = 0;
             _modeComboBox.SelectedIndexChanged += FilterChanged;
             UiTheme.StyleCombo(_modeComboBox);
-            layout.Controls.Add(_modeComboBox, 0, 0);
+            layout.Controls.Add(_modeComboBox, 2, 0);
 
             _filterComboBox = new ComboBox();
             _filterComboBox.Dock = DockStyle.Fill;
             _filterComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             _filterComboBox.SelectedIndexChanged += FilterChanged;
             UiTheme.StyleCombo(_filterComboBox);
-            layout.Controls.Add(_filterComboBox, 1, 0);
+            layout.Controls.Add(_filterComboBox, 3, 0);
 
             _dateComboBox = new ComboBox();
             _dateComboBox.Dock = DockStyle.Fill;
             _dateComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             _dateComboBox.SelectedIndexChanged += FilterChanged;
             UiTheme.StyleCombo(_dateComboBox);
-            layout.Controls.Add(_dateComboBox, 2, 0);
+            layout.Controls.Add(_dateComboBox, 4, 0);
 
             return panel;
         }
@@ -221,6 +244,8 @@ namespace ScheduleViewerApp
         private static void ConfigureGrid(DataGridView grid)
         {
             AddColumn(grid, "Date", "Дата", 90);
+            AddColumn(grid, "Course", "Курс", 80);
+            AddColumn(grid, "WeekType", "Неделя", 90);
             AddColumn(grid, "DayName", "День", 105);
             AddColumn(grid, "PairNumber", "№", 45);
             AddColumn(grid, "TimeRange", "Время", 100);
@@ -297,37 +322,59 @@ namespace ScheduleViewerApp
 
         private void FillFilters()
         {
+            if (_document == null)
+            {
+                return;
+            }
+
+            _updatingFilters = true;
+            string selectedCourse = SelectedValue(_courseComboBox);
+            string selectedWeek = SelectedValue(_weekComboBox);
+            string selectedPerson = SelectedValue(_filterComboBox);
+            string selectedDate = SelectedValue(_dateComboBox);
+
+            FillCombo(_courseComboBox, AllCoursesText, _document.Courses, selectedCourse);
+            FillCombo(_weekComboBox, AllWeeksText, _document.WeekTypes, selectedWeek);
+
             _filterComboBox.SelectedIndexChanged -= FilterChanged;
             _dateComboBox.SelectedIndexChanged -= FilterChanged;
 
             _filterComboBox.Items.Clear();
             _dateComboBox.Items.Clear();
 
-            IEnumerable<string> values = _modeComboBox.SelectedIndex == 1 ? _document.Teachers : _document.Groups;
+            List<Lesson> baseLessons = FilterByCourseAndWeek(_document.Lessons).ToList();
+            IEnumerable<string> values = _modeComboBox.SelectedIndex == 1
+                ? baseLessons.Select(x => x.Teacher)
+                : baseLessons.Select(x => x.Group);
             foreach (string value in values)
             {
-                _filterComboBox.Items.Add(value);
+                if (!string.IsNullOrWhiteSpace(value) && !_filterComboBox.Items.Contains(value))
+                {
+                    _filterComboBox.Items.Add(value);
+                }
             }
 
-            _dateComboBox.Items.Add("Все даты");
-            foreach (Lesson lesson in _document.Lessons.GroupBy(x => x.Date).Select(x => x.First()).OrderBy(x => x.Date))
+            _dateComboBox.Items.Add(AllDatesText);
+            foreach (Lesson lesson in baseLessons.GroupBy(x => x.Date).Select(x => x.First()).OrderBy(x => x.Date))
             {
                 _dateComboBox.Items.Add(lesson.Date + " " + lesson.DayName);
             }
 
-            if (_filterComboBox.Items.Count > 0)
-            {
-                _filterComboBox.SelectedIndex = 0;
-            }
-
-            _dateComboBox.SelectedIndex = 0;
+            SelectComboValue(_filterComboBox, selectedPerson, false);
+            SelectComboValue(_dateComboBox, selectedDate, true);
             _filterComboBox.SelectedIndexChanged += FilterChanged;
             _dateComboBox.SelectedIndexChanged += FilterChanged;
+            _updatingFilters = false;
         }
 
         private void FilterChanged(object sender, EventArgs e)
         {
-            if (sender == _modeComboBox && _document != null)
+            if (_updatingFilters)
+            {
+                return;
+            }
+
+            if (_document != null && (sender == _modeComboBox || sender == _courseComboBox || sender == _weekComboBox))
             {
                 FillFilters();
             }
@@ -347,7 +394,7 @@ namespace ScheduleViewerApp
 
             string selected = _filterComboBox.SelectedItem.ToString();
             bool byTeacher = _modeComboBox.SelectedIndex == 1;
-            IEnumerable<Lesson> lessons = _document.Lessons;
+            IEnumerable<Lesson> lessons = FilterByCourseAndWeek(_document.Lessons);
 
             if (byTeacher)
             {
@@ -358,7 +405,7 @@ namespace ScheduleViewerApp
                 lessons = lessons.Where(x => string.Equals(x.Group, selected, StringComparison.OrdinalIgnoreCase));
             }
 
-            if (_dateComboBox.SelectedIndex > 0)
+            if (_dateComboBox.SelectedIndex > 0 && _dateComboBox.SelectedItem != null)
             {
                 string date = _dateComboBox.SelectedItem.ToString().Substring(0, 10);
                 lessons = lessons.Where(x => string.Equals(x.Date, date, StringComparison.OrdinalIgnoreCase));
@@ -481,6 +528,72 @@ namespace ScheduleViewerApp
         private void SetStatus(string text)
         {
             _statusLabel.Text = text;
+        }
+
+        private IEnumerable<Lesson> FilterByCourseAndWeek(IEnumerable<Lesson> lessons)
+        {
+            string course = SelectedValue(_courseComboBox);
+            string week = SelectedValue(_weekComboBox);
+
+            foreach (Lesson lesson in lessons)
+            {
+                if (!string.IsNullOrWhiteSpace(course) && course != AllCoursesText &&
+                    !string.Equals(lesson.Course, course, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(week) && week != AllWeeksText &&
+                    !string.Equals(lesson.WeekType, week, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                yield return lesson;
+            }
+        }
+
+        private static void FillCombo(ComboBox comboBox, string allText, IEnumerable<string> values, string selectedValue)
+        {
+            comboBox.Items.Clear();
+            comboBox.Items.Add(allText);
+            if (values != null)
+            {
+                foreach (string value in values)
+                {
+                    if (!string.IsNullOrWhiteSpace(value) && !comboBox.Items.Contains(value))
+                    {
+                        comboBox.Items.Add(value);
+                    }
+                }
+            }
+
+            SelectComboValue(comboBox, selectedValue, true);
+        }
+
+        private static void SelectComboValue(ComboBox comboBox, string value, bool selectFirstWhenMissing)
+        {
+            if (!string.IsNullOrWhiteSpace(value) && comboBox.Items.Contains(value))
+            {
+                comboBox.SelectedItem = value;
+                return;
+            }
+
+            if (selectFirstWhenMissing && comboBox.Items.Count > 0)
+            {
+                comboBox.SelectedIndex = 0;
+                return;
+            }
+
+            if (!selectFirstWhenMissing && comboBox.Items.Count > 0)
+            {
+                comboBox.SelectedIndex = 0;
+            }
+        }
+
+        private static string SelectedValue(ComboBox comboBox)
+        {
+            return comboBox != null && comboBox.SelectedItem != null ? comboBox.SelectedItem.ToString() : string.Empty;
         }
     }
 }
