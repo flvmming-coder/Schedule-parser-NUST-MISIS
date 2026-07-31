@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5
+
+- Added global schedule publication through GitHub Pages.
+- The department app can publish the current `schedule.json` and web viewer to the `gh-pages` branch.
+- The global publication can use a pasted GitHub token, `GITHUB_TOKEN`, or an existing Git Credential Manager login.
+- The web viewer now loads `schedule.json` relative to its current page, so it works both locally and under GitHub Pages subpaths.
+- The Windows viewer now normalizes GitHub Pages page URLs to their `schedule.json` endpoint.
+
 ## 0.4.1
 
 - Fixed `ScheduleViewerApp` timeout when loading from the local server.

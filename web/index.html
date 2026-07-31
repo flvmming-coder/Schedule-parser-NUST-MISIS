@@ -358,7 +358,7 @@
     async function loadSchedule() {
       setStatus("Загружаю расписание с сервера...", false);
       try {
-        const response = await fetch("/schedule.json?ts=" + Date.now(), { cache: "no-store" });
+        const response = await fetch("schedule.json?ts=" + Date.now(), { cache: "no-store" });
         if (!response.ok) throw new Error("Сервер вернул статус " + response.status);
         state.doc = await response.json();
         fillCourseWeek();

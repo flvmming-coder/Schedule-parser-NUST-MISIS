@@ -80,11 +80,26 @@ namespace ScheduleParser.Core
                 uriBuilder.Host = "127.0.0.1";
             }
 
-            string path = uri.AbsolutePath;
+            string path = uriBuilder.Path;
             if (string.IsNullOrWhiteSpace(path) || path == "/")
             {
                 uriBuilder.Path = "schedule.json";
                 uriBuilder.Query = string.Empty;
+            }
+            else if (path.EndsWith("/", StringComparison.Ordinal))
+            {
+                uriBuilder.Path = path + "schedule.json";
+                uriBuilder.Query = string.Empty;
+            }
+            else
+            {
+                string lastSegment = path.Substring(path.LastIndexOf('/') + 1);
+                if (lastSegment.IndexOf('.') < 0 &&
+                    !string.Equals(lastSegment, "schedule", StringComparison.OrdinalIgnoreCase))
+                {
+                    uriBuilder.Path = path + "/schedule.json";
+                    uriBuilder.Query = string.Empty;
+                }
             }
 
             return uriBuilder.Uri.ToString();

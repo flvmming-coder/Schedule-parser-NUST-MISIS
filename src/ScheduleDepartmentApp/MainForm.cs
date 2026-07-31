@@ -26,6 +26,9 @@ namespace ScheduleDepartmentApp
         private Button _startServerButton;
         private Button _stopServerButton;
         private Button _openWebButton;
+        private Button _publishGlobalButton;
+        private TextBox _githubTokenTextBox;
+        private TextBox _globalUrlTextBox;
 
         public MainForm()
         {
@@ -54,7 +57,7 @@ namespace ScheduleDepartmentApp
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));
             Controls.Add(root);
 
             root.Controls.Add(CreateHeader(), 0, 0);
@@ -210,11 +213,12 @@ namespace ScheduleDepartmentApp
             TableLayoutPanel layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
             layout.ColumnCount = 2;
-            layout.RowCount = 2;
+            layout.RowCount = 3;
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 420));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
             panel.Controls.Add(layout);
 
             FlowLayoutPanel controls = new FlowLayoutPanel();
@@ -279,6 +283,42 @@ namespace ScheduleDepartmentApp
             _serverUrlsTextBox.Text = "Ссылки появятся после запуска сервера.";
             UiTheme.StyleTextBox(_serverUrlsTextBox);
             layout.Controls.Add(_serverUrlsTextBox, 1, 1);
+
+            FlowLayoutPanel globalPanel = new FlowLayoutPanel();
+            globalPanel.Dock = DockStyle.Fill;
+            globalPanel.WrapContents = false;
+            globalPanel.Padding = new Padding(0, 10, 0, 0);
+            layout.Controls.Add(globalPanel, 0, 2);
+            layout.SetColumnSpan(globalPanel, 2);
+
+            Label globalLabel = CreateSmallLabel("Глобально");
+            globalLabel.Width = 80;
+            globalPanel.Controls.Add(globalLabel);
+
+            _publishGlobalButton = new Button();
+            _publishGlobalButton.Text = "Опубликовать в интернет";
+            _publishGlobalButton.Width = 190;
+            _publishGlobalButton.Enabled = false;
+            _publishGlobalButton.Click += PublishGlobalButtonClick;
+            UiTheme.StyleButton(_publishGlobalButton, true);
+            globalPanel.Controls.Add(_publishGlobalButton);
+
+            Label tokenLabel = CreateSmallLabel("GitHub token");
+            tokenLabel.Width = 92;
+            globalPanel.Controls.Add(tokenLabel);
+
+            _githubTokenTextBox = new TextBox();
+            _githubTokenTextBox.Width = 220;
+            _githubTokenTextBox.PasswordChar = '*';
+            UiTheme.StyleTextBox(_githubTokenTextBox);
+            globalPanel.Controls.Add(_githubTokenTextBox);
+
+            _globalUrlTextBox = new TextBox();
+            _globalUrlTextBox.Width = 420;
+            _globalUrlTextBox.ReadOnly = true;
+            _globalUrlTextBox.Text = "Глобальная ссылка появится после публикации.";
+            UiTheme.StyleTextBox(_globalUrlTextBox);
+            globalPanel.Controls.Add(_globalUrlTextBox);
 
             return outer;
         }
@@ -361,6 +401,7 @@ namespace ScheduleDepartmentApp
                     _saveButton.Enabled = true;
                     _clearButton.Enabled = true;
                     _startServerButton.Enabled = true;
+                    _publishGlobalButton.Enabled = true;
                     if (restartServer)
                     {
                         StartServer();
@@ -399,6 +440,8 @@ namespace ScheduleDepartmentApp
             _startServerButton.Enabled = false;
             _stopServerButton.Enabled = false;
             _openWebButton.Enabled = false;
+            _publishGlobalButton.Enabled = false;
+            _globalUrlTextBox.Text = "Глобальная ссылка появится после публикации.";
 
             try
             {
@@ -486,6 +529,37 @@ namespace ScheduleDepartmentApp
             _serverStateLabel.Text = "Сервер остановлен";
             _serverUrlsTextBox.Text = "Ссылки появятся после запуска сервера.";
             SetStatus("Сервер остановлен.");
+        }
+
+        private void PublishGlobalButtonClick(object sender, EventArgs e)
+        {
+            if (_document == null)
+            {
+                MessageBox.Show(this, "Сначала импортируйте Excel-расписание.", "Нет данных", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                Cursor = Cursors.WaitCursor;
+                SaveToPublicationPath();
+
+                string webIndexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
+                GitHubPagesPublisher publisher = new GitHubPagesPublisher("flvmming-coder", "Schedule-parser-NUST-MISIS", "gh-pages");
+                GitHubPublishResult result = publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text);
+                _globalUrlTextBox.Text = result.PageUrl;
+                Clipboard.SetText(result.PageUrl);
+                SetStatus("Расписание опубликовано в интернет. Глобальная ссылка скопирована: " + result.PageUrl);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Ошибка глобальной публикации", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Не удалось опубликовать расписание в интернет.");
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
+            }
         }
 
         private void OpenWebButtonClick(object sender, EventArgs e)
