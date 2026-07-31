@@ -27,6 +27,7 @@ namespace ScheduleDepartmentApp
         private Button _stopServerButton;
         private Button _openWebButton;
         private Button _publishGlobalButton;
+        private CheckBox _protectedGlobalCheckBox;
         private TextBox _githubTokenTextBox;
         private TextBox _globalUrlTextBox;
 
@@ -271,7 +272,7 @@ namespace ScheduleDepartmentApp
             Label hint = new Label();
             hint.Dock = DockStyle.Fill;
             hint.ForeColor = UiTheme.Muted;
-            hint.Text = "На телефоне или другом ПК откройте ссылку из правого блока. Устройства должны быть в одной Wi-Fi/LAN сети. Если Windows спросит доступ через брандмауэр, разрешите частные сети.";
+            hint.Text = "Локальный сервер работает в одной Wi-Fi/LAN сети. Для доступа откуда угодно используйте глобальную публикацию ниже.";
             hint.TextAlign = ContentAlignment.TopLeft;
             layout.Controls.Add(hint, 0, 1);
 
@@ -297,24 +298,32 @@ namespace ScheduleDepartmentApp
 
             _publishGlobalButton = new Button();
             _publishGlobalButton.Text = "Опубликовать в интернет";
-            _publishGlobalButton.Width = 190;
+            _publishGlobalButton.Width = 176;
             _publishGlobalButton.Enabled = false;
             _publishGlobalButton.Click += PublishGlobalButtonClick;
             UiTheme.StyleButton(_publishGlobalButton, true);
             globalPanel.Controls.Add(_publishGlobalButton);
 
+            _protectedGlobalCheckBox = new CheckBox();
+            _protectedGlobalCheckBox.Text = "Защищенный канал";
+            _protectedGlobalCheckBox.Width = 154;
+            _protectedGlobalCheckBox.Height = 36;
+            _protectedGlobalCheckBox.Checked = true;
+            _protectedGlobalCheckBox.ForeColor = UiTheme.Text;
+            globalPanel.Controls.Add(_protectedGlobalCheckBox);
+
             Label tokenLabel = CreateSmallLabel("GitHub token");
-            tokenLabel.Width = 92;
+            tokenLabel.Width = 86;
             globalPanel.Controls.Add(tokenLabel);
 
             _githubTokenTextBox = new TextBox();
-            _githubTokenTextBox.Width = 220;
+            _githubTokenTextBox.Width = 170;
             _githubTokenTextBox.PasswordChar = '*';
             UiTheme.StyleTextBox(_githubTokenTextBox);
             globalPanel.Controls.Add(_githubTokenTextBox);
 
             _globalUrlTextBox = new TextBox();
-            _globalUrlTextBox.Width = 420;
+            _globalUrlTextBox.Width = 360;
             _globalUrlTextBox.ReadOnly = true;
             _globalUrlTextBox.Text = "Глобальная ссылка появится после публикации.";
             UiTheme.StyleTextBox(_globalUrlTextBox);
@@ -546,10 +555,12 @@ namespace ScheduleDepartmentApp
 
                 string webIndexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
                 GitHubPagesPublisher publisher = new GitHubPagesPublisher("flvmming-coder", "Schedule-parser-NUST-MISIS", "gh-pages");
-                GitHubPublishResult result = publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text);
+                bool protectBrowserAccess = _protectedGlobalCheckBox.Checked;
+                GitHubPublishResult result = publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text, protectBrowserAccess);
                 _globalUrlTextBox.Text = result.PageUrl;
                 Clipboard.SetText(result.PageUrl);
-                SetStatus("Расписание опубликовано в интернет. Глобальная ссылка скопирована: " + result.PageUrl);
+                string accessMode = result.IsProtected ? "защищенный" : "открытый";
+                SetStatus("Расписание опубликовано в интернет: " + accessMode + " глобальный доступ. Ссылка скопирована: " + result.PageUrl);
             }
             catch (Exception ex)
             {

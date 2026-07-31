@@ -14,6 +14,11 @@ namespace ScheduleParser.Core
 
         public static ScheduleDocument FromJson(string json)
         {
+            if (BrowserScheduleProtector.IsProtectedJson(json))
+            {
+                json = BrowserScheduleProtector.UnprotectJsonWithDefaultPassword(json);
+            }
+
             JavaScriptSerializer serializer = CreateSerializer();
             return serializer.Deserialize<ScheduleDocument>(json);
         }

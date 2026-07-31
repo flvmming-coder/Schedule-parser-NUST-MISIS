@@ -323,7 +323,9 @@ namespace ScheduleParser.Core
                 string path = Path.Combine(root, "web", "index.html");
                 if (File.Exists(path))
                 {
-                    return File.ReadAllText(path, Encoding.UTF8).Replace("{{VERSION}}", AppInfo.Version);
+                    return File.ReadAllText(path, Encoding.UTF8)
+                        .Replace("{{VERSION}}", AppInfo.Version)
+                        .Replace("{{ACCESS_PROTECTED}}", "false");
                 }
             }
 

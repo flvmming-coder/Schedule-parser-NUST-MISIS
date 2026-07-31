@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+
+- Added protected global browser access for GitHub Pages publication.
+- The department app now has a `Защищенный канал` switch for global publication.
+- Protected publication encrypts `schedule.json` and the browser page asks for a password before showing the schedule.
+- Open publication still produces ordinary JSON for unrestricted access.
+- Windows apps keep working without a password prompt; protected JSON is opened by the shared core logic.
+
 ## 0.5
 
 - Added global schedule publication through GitHub Pages.

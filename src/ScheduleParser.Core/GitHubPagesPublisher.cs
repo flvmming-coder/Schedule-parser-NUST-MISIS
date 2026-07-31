@@ -27,6 +27,11 @@ namespace ScheduleParser.Core
 
         public GitHubPublishResult Publish(ScheduleDocument document, string webIndexPath, string token)
         {
+            return Publish(document, webIndexPath, token, false);
+        }
+
+        public GitHubPublishResult Publish(ScheduleDocument document, string webIndexPath, string token, bool protectBrowserAccess)
+        {
             if (document == null)
             {
                 throw new ArgumentNullException("document");
@@ -37,8 +42,11 @@ namespace ScheduleParser.Core
                 string resolvedToken = ResolveToken(token);
                 EnsureBranch(resolvedToken);
 
-                string indexHtml = LoadIndexHtml(webIndexPath);
-                string scheduleJson = ScheduleJsonSerializer.ToJson(document);
+                string indexHtml = LoadIndexHtml(webIndexPath, protectBrowserAccess);
+                string plainScheduleJson = ScheduleJsonSerializer.ToJson(document);
+                string scheduleJson = protectBrowserAccess
+                    ? BrowserScheduleProtector.ProtectJson(plainScheduleJson)
+                    : plainScheduleJson;
 
                 PutTextFile("index.html", indexHtml, "Publish global schedule web viewer", resolvedToken);
                 PutTextFile("schedule.json", scheduleJson, "Publish global schedule data", resolvedToken);
@@ -46,6 +54,7 @@ namespace ScheduleParser.Core
                 GitHubPublishResult result = new GitHubPublishResult();
                 result.PageUrl = "https://" + Owner + ".github.io/" + Repository + "/";
                 result.ScheduleJsonUrl = result.PageUrl + "schedule.json";
+                result.IsProtected = protectBrowserAccess;
                 return result;
             }
             catch (WebException ex)
@@ -54,20 +63,27 @@ namespace ScheduleParser.Core
             }
         }
 
-        private string LoadIndexHtml(string webIndexPath)
+        private string LoadIndexHtml(string webIndexPath, bool protectBrowserAccess)
         {
             if (!string.IsNullOrWhiteSpace(webIndexPath) && File.Exists(webIndexPath))
             {
-                return File.ReadAllText(webIndexPath, Encoding.UTF8).Replace("{{VERSION}}", AppInfo.Version);
+                return ReplaceIndexTokens(File.ReadAllText(webIndexPath, Encoding.UTF8), protectBrowserAccess);
             }
 
             string fallback = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
             if (File.Exists(fallback))
             {
-                return File.ReadAllText(fallback, Encoding.UTF8).Replace("{{VERSION}}", AppInfo.Version);
+                return ReplaceIndexTokens(File.ReadAllText(fallback, Encoding.UTF8), protectBrowserAccess);
             }
 
             throw new FileNotFoundException("Не найден web/index.html для публикации в интернет.");
+        }
+
+        private static string ReplaceIndexTokens(string html, bool protectBrowserAccess)
+        {
+            return html
+                .Replace("{{VERSION}}", AppInfo.Version)
+                .Replace("{{ACCESS_PROTECTED}}", protectBrowserAccess ? "true" : "false");
         }
 
         private void EnsureBranch(string token)
@@ -265,5 +281,6 @@ namespace ScheduleParser.Core
     {
         public string PageUrl { get; set; }
         public string ScheduleJsonUrl { get; set; }
+        public bool IsProtected { get; set; }
     }
 }
