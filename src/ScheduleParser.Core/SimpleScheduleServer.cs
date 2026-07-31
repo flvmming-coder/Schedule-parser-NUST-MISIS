@@ -201,7 +201,14 @@ namespace ScheduleParser.Core
 
             if (path == "/" || path == "/index.html")
             {
-                string html = LoadIndexHtml();
+                string html = LoadWebHtml("index.html");
+                WriteResponse(stream, 200, "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html), headOnly);
+                return;
+            }
+
+            if (path == "/schedule.html")
+            {
+                string html = LoadWebHtml("schedule.html");
                 WriteResponse(stream, 200, "text/html; charset=utf-8", Encoding.UTF8.GetBytes(html), headOnly);
                 return;
             }
@@ -305,7 +312,7 @@ namespace ScheduleParser.Core
             return urls.ToArray();
         }
 
-        private static string LoadIndexHtml()
+        private static string LoadWebHtml(string fileName)
         {
             string[] roots = new string[]
             {
@@ -320,7 +327,7 @@ namespace ScheduleParser.Core
                     continue;
                 }
 
-                string path = Path.Combine(root, "web", "index.html");
+                string path = Path.Combine(root, "web", fileName);
                 if (File.Exists(path))
                 {
                     return File.ReadAllText(path, Encoding.UTF8)

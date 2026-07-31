@@ -8,7 +8,7 @@ namespace ScheduleParser.Core
 {
     public static class BrowserScheduleProtector
     {
-        private const string DefaultBrowserPassword = "Student2026";
+        public const string DefaultBrowserPassword = "Student2026";
         private const int SaltSize = 16;
         private const int IvSize = 16;
         private const int AesKeySize = 32;
@@ -19,14 +19,24 @@ namespace ScheduleParser.Core
 
         public static string ProtectJson(string plainJson)
         {
+            return ProtectJson(plainJson, DefaultBrowserPassword);
+        }
+
+        public static string ProtectJson(string plainJson, string password)
+        {
             if (plainJson == null)
             {
                 throw new ArgumentNullException("plainJson");
             }
 
+            if (string.IsNullOrEmpty(password))
+            {
+                password = DefaultBrowserPassword;
+            }
+
             byte[] salt = RandomBytes(SaltSize);
             byte[] iv = RandomBytes(IvSize);
-            byte[] derived = DeriveKey(Encoding.UTF8.GetBytes(DefaultBrowserPassword), salt, Iterations, AesKeySize + MacKeySize);
+            byte[] derived = DeriveKey(Encoding.UTF8.GetBytes(password), salt, Iterations, AesKeySize + MacKeySize);
             byte[] aesKey = Slice(derived, 0, AesKeySize);
             byte[] macKey = Slice(derived, AesKeySize, MacKeySize);
             byte[] cipherText = EncryptAesCbc(Encoding.UTF8.GetBytes(plainJson), aesKey, iv);

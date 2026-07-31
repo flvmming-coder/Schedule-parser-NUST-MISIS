@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2
+
+- Added a password visibility eye button on the browser welcome page.
+- Added a custom browser password field for protected global publication; the default remains `Student2026`.
+- Split the web version into a welcome/password page and a separate schedule page.
+- Added a loaded Excel files manager in the department app with add, replace, delete, and apply actions.
+- The global publisher now uploads both `index.html` and `schedule.html`.
+- The viewer URL normalizer accepts `schedule.html` links and resolves them to `schedule.json`.
+
 ## 0.5.1
 
 - Added protected global browser access for GitHub Pages publication.

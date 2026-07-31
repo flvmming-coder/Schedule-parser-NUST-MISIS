@@ -94,7 +94,14 @@ namespace ScheduleParser.Core
             else
             {
                 string lastSegment = path.Substring(path.LastIndexOf('/') + 1);
-                if (lastSegment.IndexOf('.') < 0 &&
+                if (lastSegment.EndsWith(".html", StringComparison.OrdinalIgnoreCase) ||
+                    lastSegment.EndsWith(".htm", StringComparison.OrdinalIgnoreCase))
+                {
+                    int lastSlash = path.LastIndexOf('/');
+                    uriBuilder.Path = path.Substring(0, lastSlash + 1) + "schedule.json";
+                    uriBuilder.Query = string.Empty;
+                }
+                else if (lastSegment.IndexOf('.') < 0 &&
                     !string.Equals(lastSegment, "schedule", StringComparison.OrdinalIgnoreCase))
                 {
                     uriBuilder.Path = path + "/schedule.json";

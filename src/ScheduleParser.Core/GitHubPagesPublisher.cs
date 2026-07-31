@@ -32,6 +32,11 @@ namespace ScheduleParser.Core
 
         public GitHubPublishResult Publish(ScheduleDocument document, string webIndexPath, string token, bool protectBrowserAccess)
         {
+            return Publish(document, webIndexPath, token, protectBrowserAccess, BrowserScheduleProtector.DefaultBrowserPassword);
+        }
+
+        public GitHubPublishResult Publish(ScheduleDocument document, string webIndexPath, string token, bool protectBrowserAccess, string browserPassword)
+        {
             if (document == null)
             {
                 throw new ArgumentNullException("document");
@@ -42,13 +47,16 @@ namespace ScheduleParser.Core
                 string resolvedToken = ResolveToken(token);
                 EnsureBranch(resolvedToken);
 
-                string indexHtml = LoadIndexHtml(webIndexPath, protectBrowserAccess);
+                string webRoot = ResolveWebRoot(webIndexPath);
+                string indexHtml = LoadWebHtml(webRoot, "index.html", protectBrowserAccess);
+                string scheduleHtml = LoadWebHtml(webRoot, "schedule.html", protectBrowserAccess);
                 string plainScheduleJson = ScheduleJsonSerializer.ToJson(document);
                 string scheduleJson = protectBrowserAccess
-                    ? BrowserScheduleProtector.ProtectJson(plainScheduleJson)
+                    ? BrowserScheduleProtector.ProtectJson(plainScheduleJson, browserPassword)
                     : plainScheduleJson;
 
                 PutTextFile("index.html", indexHtml, "Publish global schedule web viewer", resolvedToken);
+                PutTextFile("schedule.html", scheduleHtml, "Publish global schedule page", resolvedToken);
                 PutTextFile("schedule.json", scheduleJson, "Publish global schedule data", resolvedToken);
 
                 GitHubPublishResult result = new GitHubPublishResult();
@@ -63,20 +71,35 @@ namespace ScheduleParser.Core
             }
         }
 
-        private string LoadIndexHtml(string webIndexPath, bool protectBrowserAccess)
+        private static string ResolveWebRoot(string webIndexPath)
         {
-            if (!string.IsNullOrWhiteSpace(webIndexPath) && File.Exists(webIndexPath))
+            if (!string.IsNullOrWhiteSpace(webIndexPath))
             {
-                return ReplaceIndexTokens(File.ReadAllText(webIndexPath, Encoding.UTF8), protectBrowserAccess);
+                string root = Directory.Exists(webIndexPath) ? webIndexPath : Path.GetDirectoryName(webIndexPath);
+                if (!string.IsNullOrWhiteSpace(root) && Directory.Exists(root))
+                {
+                    return root;
+                }
             }
 
-            string fallback = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
-            if (File.Exists(fallback))
+            string fallback = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web");
+            if (Directory.Exists(fallback))
             {
-                return ReplaceIndexTokens(File.ReadAllText(fallback, Encoding.UTF8), protectBrowserAccess);
+                return fallback;
             }
 
-            throw new FileNotFoundException("Не найден web/index.html для публикации в интернет.");
+            throw new DirectoryNotFoundException("Не найдена папка web для публикации в интернет.");
+        }
+
+        private string LoadWebHtml(string webRoot, string fileName, bool protectBrowserAccess)
+        {
+            string path = Path.Combine(webRoot, fileName);
+            if (File.Exists(path))
+            {
+                return ReplaceIndexTokens(File.ReadAllText(path, Encoding.UTF8), protectBrowserAccess);
+            }
+
+            throw new FileNotFoundException("Не найден " + fileName + " для публикации в интернет.", path);
         }
 
         private static string ReplaceIndexTokens(string html, bool protectBrowserAccess)

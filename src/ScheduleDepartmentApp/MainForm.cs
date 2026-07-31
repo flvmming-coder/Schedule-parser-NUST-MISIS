@@ -12,6 +12,7 @@ namespace ScheduleDepartmentApp
     {
         private readonly XlsxScheduleParser _parser;
         private readonly SimpleScheduleServer _server;
+        private readonly List<string> _loadedFilePaths;
         private ScheduleDocument _document;
         private TextBox _filesTextBox;
         private TextBox _jsonPathTextBox;
@@ -21,6 +22,7 @@ namespace ScheduleDepartmentApp
         private Label _serverStateLabel;
         private DataGridView _grid;
         private CheckBox[] _courseCheckBoxes;
+        private Button _manageFilesButton;
         private Button _clearButton;
         private Button _saveButton;
         private Button _startServerButton;
@@ -28,6 +30,7 @@ namespace ScheduleDepartmentApp
         private Button _openWebButton;
         private Button _publishGlobalButton;
         private CheckBox _protectedGlobalCheckBox;
+        private TextBox _globalPasswordTextBox;
         private TextBox _githubTokenTextBox;
         private TextBox _globalUrlTextBox;
 
@@ -35,6 +38,7 @@ namespace ScheduleDepartmentApp
         {
             _parser = new XlsxScheduleParser();
             _server = new SimpleScheduleServer();
+            _loadedFilePaths = new List<string>();
             InitializeComponent();
         }
 
@@ -58,7 +62,7 @@ namespace ScheduleDepartmentApp
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 285));
             Controls.Add(root);
 
             root.Controls.Add(CreateHeader(), 0, 0);
@@ -131,9 +135,17 @@ namespace ScheduleDepartmentApp
             UiTheme.StyleButton(openButton, true);
             actions.Controls.Add(openButton);
 
+            _manageFilesButton = new Button();
+            _manageFilesButton.Text = "Файлы";
+            _manageFilesButton.Width = 96;
+            _manageFilesButton.Enabled = false;
+            _manageFilesButton.Click += ManageFilesButtonClick;
+            UiTheme.StyleButton(_manageFilesButton, false);
+            actions.Controls.Add(_manageFilesButton);
+
             _saveButton = new Button();
             _saveButton.Text = "Сохранить JSON";
-            _saveButton.Width = 150;
+            _saveButton.Width = 140;
             _saveButton.Enabled = false;
             _saveButton.Click += SaveButtonClick;
             UiTheme.StyleButton(_saveButton, false);
@@ -152,7 +164,7 @@ namespace ScheduleDepartmentApp
             actions.Controls.Add(jsonLabel);
 
             _jsonPathTextBox = new TextBox();
-            _jsonPathTextBox.Width = 480;
+            _jsonPathTextBox.Width = 390;
             _jsonPathTextBox.Text = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data", "schedule.json");
             UiTheme.StyleTextBox(_jsonPathTextBox);
             actions.Controls.Add(_jsonPathTextBox);
@@ -219,7 +231,7 @@ namespace ScheduleDepartmentApp
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
             panel.Controls.Add(layout);
 
             FlowLayoutPanel controls = new FlowLayoutPanel();
@@ -287,7 +299,7 @@ namespace ScheduleDepartmentApp
 
             FlowLayoutPanel globalPanel = new FlowLayoutPanel();
             globalPanel.Dock = DockStyle.Fill;
-            globalPanel.WrapContents = false;
+            globalPanel.WrapContents = true;
             globalPanel.Padding = new Padding(0, 10, 0, 0);
             layout.Controls.Add(globalPanel, 0, 2);
             layout.SetColumnSpan(globalPanel, 2);
@@ -310,7 +322,18 @@ namespace ScheduleDepartmentApp
             _protectedGlobalCheckBox.Height = 36;
             _protectedGlobalCheckBox.Checked = true;
             _protectedGlobalCheckBox.ForeColor = UiTheme.Text;
+            _protectedGlobalCheckBox.CheckedChanged += ProtectedGlobalCheckBoxChanged;
             globalPanel.Controls.Add(_protectedGlobalCheckBox);
+
+            Label passwordLabel = CreateSmallLabel("Пароль");
+            passwordLabel.Width = 58;
+            globalPanel.Controls.Add(passwordLabel);
+
+            _globalPasswordTextBox = new TextBox();
+            _globalPasswordTextBox.Width = 142;
+            _globalPasswordTextBox.Text = BrowserScheduleProtector.DefaultBrowserPassword;
+            UiTheme.StyleTextBox(_globalPasswordTextBox);
+            globalPanel.Controls.Add(_globalPasswordTextBox);
 
             Label tokenLabel = CreateSmallLabel("GitHub token");
             tokenLabel.Width = 86;
@@ -381,51 +404,91 @@ namespace ScheduleDepartmentApp
                     return;
                 }
 
-                try
+                ImportFilePaths(dialog.FileNames);
+            }
+        }
+
+        private void ManageFilesButtonClick(object sender, EventArgs e)
+        {
+            using (LoadedFilesForm dialog = new LoadedFilesForm(_loadedFilePaths))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK)
                 {
-                    int[] selectedCourses = GetSelectedCourses();
-                    if (selectedCourses.Length == 0)
-                    {
-                        MessageBox.Show(this, "Выберите хотя бы один курс для загрузки.", "Курсы не выбраны", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        return;
-                    }
+                    return;
+                }
 
-                    bool restartServer = _server.IsRunning;
-                    if (restartServer)
-                    {
-                        _server.Stop();
-                    }
+                ImportFilePaths(dialog.FilePaths);
+            }
+        }
 
-                    Cursor = Cursors.WaitCursor;
-                    _document = _parser.ParseFiles(dialog.FileNames, selectedCourses);
-                    if (_document.Lessons.Count == 0)
+        private void ImportFilePaths(IEnumerable<string> filePaths)
+        {
+            List<string> files = new List<string>();
+            if (filePaths != null)
+            {
+                foreach (string filePath in filePaths)
+                {
+                    if (!string.IsNullOrWhiteSpace(filePath) && File.Exists(filePath) && !files.Contains(filePath))
                     {
-                        throw new InvalidOperationException("В выбранных файлах не найдено занятий для отмеченных курсов.");
-                    }
-
-                    _filesTextBox.Text = string.Join("; ", dialog.FileNames);
-                    BindLessons();
-                    SaveToPublicationPath();
-                    SetStatus(string.Format("Готово: {0} занятий, курсы: {1}, недели: {2}, групп: {3}, преподавателей: {4}.", _document.Lessons.Count, JoinList(_document.Courses), JoinList(_document.WeekTypes), _document.Groups.Count, _document.Teachers.Count));
-                    _saveButton.Enabled = true;
-                    _clearButton.Enabled = true;
-                    _startServerButton.Enabled = true;
-                    _publishGlobalButton.Enabled = true;
-                    if (restartServer)
-                    {
-                        StartServer();
-                        SetStatus("Расписание обновлено, сервер перезапущен с новыми файлами.");
+                        files.Add(filePath);
                     }
                 }
-                catch (Exception ex)
+            }
+
+            if (files.Count == 0)
+            {
+                ClearCurrentSchedule(true);
+                SetStatus("Список Excel-файлов пуст. Текущее расписание очищено.");
+                return;
+            }
+
+            try
+            {
+                int[] selectedCourses = GetSelectedCourses();
+                if (selectedCourses.Length == 0)
                 {
-                    MessageBox.Show(this, ex.Message, "Ошибка импорта", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    SetStatus("Не удалось разобрать Excel-файл.");
+                    MessageBox.Show(this, "Выберите хотя бы один курс для загрузки.", "Курсы не выбраны", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
                 }
-                finally
+
+                bool restartServer = _server.IsRunning;
+                if (restartServer)
                 {
-                    Cursor = Cursors.Default;
+                    _server.Stop();
                 }
+
+                Cursor = Cursors.WaitCursor;
+                _document = _parser.ParseFiles(files.ToArray(), selectedCourses);
+                if (_document.Lessons.Count == 0)
+                {
+                    throw new InvalidOperationException("В выбранных файлах не найдено занятий для отмеченных курсов.");
+                }
+
+                _loadedFilePaths.Clear();
+                _loadedFilePaths.AddRange(files);
+                SetLoadedFilesText();
+                BindLessons();
+                SaveToPublicationPath();
+                SetStatus(string.Format("Готово: {0} занятий, файлов: {1}, курсы: {2}, недели: {3}, групп: {4}, преподавателей: {5}.", _document.Lessons.Count, _loadedFilePaths.Count, JoinList(_document.Courses), JoinList(_document.WeekTypes), _document.Groups.Count, _document.Teachers.Count));
+                _manageFilesButton.Enabled = true;
+                _saveButton.Enabled = true;
+                _clearButton.Enabled = true;
+                _startServerButton.Enabled = true;
+                _publishGlobalButton.Enabled = true;
+                if (restartServer)
+                {
+                    StartServer();
+                    SetStatus("Расписание обновлено, сервер перезапущен с новыми файлами.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Ошибка импорта", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                SetStatus("Не удалось разобрать Excel-файл.");
+            }
+            finally
+            {
+                Cursor = Cursors.Default;
             }
         }
 
@@ -437,13 +500,22 @@ namespace ScheduleDepartmentApp
                 return;
             }
 
+            ClearCurrentSchedule(true);
+
+            SetStatus("Текущее расписание очищено. Можно загрузить новые файлы.");
+        }
+
+        private void ClearCurrentSchedule(bool deleteJson)
+        {
             _server.Stop();
             _document = null;
+            _loadedFilePaths.Clear();
             _grid.DataSource = new List<Lesson>();
-            _filesTextBox.Text = "Файлы Excel пока не выбраны";
+            SetLoadedFilesText();
             _serverStateLabel.ForeColor = UiTheme.Muted;
             _serverStateLabel.Text = "Сервер остановлен";
             _serverUrlsTextBox.Text = "Ссылки появятся после запуска сервера.";
+            _manageFilesButton.Enabled = false;
             _saveButton.Enabled = false;
             _clearButton.Enabled = false;
             _startServerButton.Enabled = false;
@@ -451,6 +523,11 @@ namespace ScheduleDepartmentApp
             _openWebButton.Enabled = false;
             _publishGlobalButton.Enabled = false;
             _globalUrlTextBox.Text = "Глобальная ссылка появится после публикации.";
+
+            if (!deleteJson)
+            {
+                return;
+            }
 
             try
             {
@@ -463,8 +540,6 @@ namespace ScheduleDepartmentApp
             {
                 MessageBox.Show(this, ex.Message, "Не удалось удалить JSON", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
-
-            SetStatus("Текущее расписание очищено. Можно загрузить новые файлы.");
         }
 
         private void SaveButtonClick(object sender, EventArgs e)
@@ -556,7 +631,10 @@ namespace ScheduleDepartmentApp
                 string webIndexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
                 GitHubPagesPublisher publisher = new GitHubPagesPublisher("flvmming-coder", "Schedule-parser-NUST-MISIS", "gh-pages");
                 bool protectBrowserAccess = _protectedGlobalCheckBox.Checked;
-                GitHubPublishResult result = publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text, protectBrowserAccess);
+                string browserPassword = string.IsNullOrWhiteSpace(_globalPasswordTextBox.Text)
+                    ? BrowserScheduleProtector.DefaultBrowserPassword
+                    : _globalPasswordTextBox.Text;
+                GitHubPublishResult result = publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text, protectBrowserAccess, browserPassword);
                 _globalUrlTextBox.Text = result.PageUrl;
                 Clipboard.SetText(result.PageUrl);
                 string accessMode = result.IsProtected ? "защищенный" : "открытый";
@@ -570,6 +648,15 @@ namespace ScheduleDepartmentApp
             finally
             {
                 Cursor = Cursors.Default;
+            }
+        }
+
+        private void ProtectedGlobalCheckBoxChanged(object sender, EventArgs e)
+        {
+            _globalPasswordTextBox.Enabled = _protectedGlobalCheckBox.Checked;
+            if (_protectedGlobalCheckBox.Checked && string.IsNullOrWhiteSpace(_globalPasswordTextBox.Text))
+            {
+                _globalPasswordTextBox.Text = BrowserScheduleProtector.DefaultBrowserPassword;
             }
         }
 
@@ -633,6 +720,17 @@ namespace ScheduleDepartmentApp
             }
 
             ScheduleJsonSerializer.Save(_document, _jsonPathTextBox.Text);
+        }
+
+        private void SetLoadedFilesText()
+        {
+            if (_loadedFilePaths.Count == 0)
+            {
+                _filesTextBox.Text = "Файлы Excel пока не выбраны";
+                return;
+            }
+
+            _filesTextBox.Text = string.Join("; ", _loadedFilePaths.ToArray());
         }
 
         private int[] GetSelectedCourses()
@@ -700,6 +798,179 @@ namespace ScheduleDepartmentApp
         private void SetStatus(string text)
         {
             _statusLabel.Text = text;
+        }
+    }
+
+    internal sealed class LoadedFilesForm : Form
+    {
+        private readonly ListBox _filesListBox;
+        private readonly List<string> _filePaths;
+
+        public LoadedFilesForm(IEnumerable<string> filePaths)
+        {
+            _filePaths = new List<string>();
+            if (filePaths != null)
+            {
+                _filePaths.AddRange(filePaths);
+            }
+
+            Text = "Загруженные файлы расписания";
+            MinimumSize = new Size(760, 420);
+            StartPosition = FormStartPosition.CenterParent;
+            UiTheme.StyleForm(this);
+
+            TableLayoutPanel root = new TableLayoutPanel();
+            root.Dock = DockStyle.Fill;
+            root.ColumnCount = 1;
+            root.RowCount = 3;
+            root.Padding = new Padding(14);
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            Controls.Add(root);
+
+            Label title = new Label();
+            title.Text = "Файлы Excel";
+            title.ForeColor = UiTheme.Text;
+            title.Font = new Font("Segoe UI", 16f, FontStyle.Bold);
+            title.AutoSize = true;
+            root.Controls.Add(title, 0, 0);
+
+            _filesListBox = new ListBox();
+            _filesListBox.Dock = DockStyle.Fill;
+            _filesListBox.HorizontalScrollbar = true;
+            _filesListBox.Font = new Font("Segoe UI", 9.5f);
+            root.Controls.Add(_filesListBox, 0, 1);
+
+            FlowLayoutPanel actions = new FlowLayoutPanel();
+            actions.Dock = DockStyle.Fill;
+            actions.FlowDirection = FlowDirection.RightToLeft;
+            actions.WrapContents = false;
+            root.Controls.Add(actions, 0, 2);
+
+            Button applyButton = CreateButton("Применить", true);
+            applyButton.Click += ApplyButtonClick;
+            actions.Controls.Add(applyButton);
+
+            Button cancelButton = CreateButton("Отмена", false);
+            cancelButton.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
+            actions.Controls.Add(cancelButton);
+
+            Button deleteButton = CreateButton("Удалить", false);
+            deleteButton.Click += DeleteButtonClick;
+            actions.Controls.Add(deleteButton);
+
+            Button replaceButton = CreateButton("Заменить", false);
+            replaceButton.Click += ReplaceButtonClick;
+            actions.Controls.Add(replaceButton);
+
+            Button addButton = CreateButton("Добавить", false);
+            addButton.Click += AddButtonClick;
+            actions.Controls.Add(addButton);
+
+            RefreshList();
+        }
+
+        public string[] FilePaths
+        {
+            get { return _filePaths.ToArray(); }
+        }
+
+        private static Button CreateButton(string text, bool primary)
+        {
+            Button button = new Button();
+            button.Text = text;
+            button.Width = 112;
+            UiTheme.StyleButton(button, primary);
+            return button;
+        }
+
+        private void AddButtonClick(object sender, EventArgs e)
+        {
+            using (OpenFileDialog dialog = CreateExcelDialog(true))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                foreach (string fileName in dialog.FileNames)
+                {
+                    if (!_filePaths.Contains(fileName))
+                    {
+                        _filePaths.Add(fileName);
+                    }
+                }
+            }
+
+            RefreshList();
+        }
+
+        private void ReplaceButtonClick(object sender, EventArgs e)
+        {
+            int index = _filesListBox.SelectedIndex;
+            if (index < 0 || index >= _filePaths.Count)
+            {
+                MessageBox.Show(this, "Выберите файл для замены.", "Файл не выбран", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using (OpenFileDialog dialog = CreateExcelDialog(false))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                _filePaths[index] = dialog.FileName;
+            }
+
+            RefreshList();
+            if (_filesListBox.Items.Count > 0)
+            {
+                _filesListBox.SelectedIndex = Math.Min(index, _filesListBox.Items.Count - 1);
+            }
+        }
+
+        private void DeleteButtonClick(object sender, EventArgs e)
+        {
+            int index = _filesListBox.SelectedIndex;
+            if (index < 0 || index >= _filePaths.Count)
+            {
+                MessageBox.Show(this, "Выберите файл для удаления.", "Файл не выбран", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            _filePaths.RemoveAt(index);
+            RefreshList();
+            if (_filesListBox.Items.Count > 0)
+            {
+                _filesListBox.SelectedIndex = Math.Min(index, _filesListBox.Items.Count - 1);
+            }
+        }
+
+        private void ApplyButtonClick(object sender, EventArgs e)
+        {
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        private static OpenFileDialog CreateExcelDialog(bool multiselect)
+        {
+            OpenFileDialog dialog = new OpenFileDialog();
+            dialog.Filter = "Excel files (*.xlsx)|*.xlsx|All files (*.*)|*.*";
+            dialog.Multiselect = multiselect;
+            dialog.Title = "Выберите расписание Excel";
+            return dialog;
+        }
+
+        private void RefreshList()
+        {
+            _filesListBox.Items.Clear();
+            foreach (string filePath in _filePaths)
+            {
+                _filesListBox.Items.Add(filePath);
+            }
         }
     }
 }
