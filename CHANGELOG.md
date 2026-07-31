@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.3
+
+- Added automatic GitHub Pages synchronization while the department server is running.
+- The department app now republishes the global schedule immediately after server start and then every 5 minutes.
+- Added an `Автообновлять сайт` switch for the global publication loop.
+- The browser schedule page now checks `schedule.json` every 5 minutes and shows a no-connection state when the ping fails.
+- Network errors on the protected schedule page no longer force a password reset unless the password itself is invalid.
+
 ## 0.5.2
 
 - Added a password visibility eye button on the browser welcome page.

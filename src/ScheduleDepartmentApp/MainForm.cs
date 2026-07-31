@@ -10,9 +10,12 @@ namespace ScheduleDepartmentApp
 {
     public sealed class MainForm : Form
     {
+        private const int GlobalAutoPublishIntervalMilliseconds = 300000;
+
         private readonly XlsxScheduleParser _parser;
         private readonly SimpleScheduleServer _server;
         private readonly List<string> _loadedFilePaths;
+        private readonly Timer _globalAutoPublishTimer;
         private ScheduleDocument _document;
         private TextBox _filesTextBox;
         private TextBox _jsonPathTextBox;
@@ -29,21 +32,27 @@ namespace ScheduleDepartmentApp
         private Button _stopServerButton;
         private Button _openWebButton;
         private Button _publishGlobalButton;
+        private CheckBox _autoGlobalPublishCheckBox;
         private CheckBox _protectedGlobalCheckBox;
         private TextBox _globalPasswordTextBox;
         private TextBox _githubTokenTextBox;
         private TextBox _globalUrlTextBox;
+        private volatile bool _globalPublishInProgress;
 
         public MainForm()
         {
             _parser = new XlsxScheduleParser();
             _server = new SimpleScheduleServer();
             _loadedFilePaths = new List<string>();
+            _globalAutoPublishTimer = new Timer();
+            _globalAutoPublishTimer.Interval = GlobalAutoPublishIntervalMilliseconds;
+            _globalAutoPublishTimer.Tick += GlobalAutoPublishTimerTick;
             InitializeComponent();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            StopGlobalAutoPublishLoop();
             _server.Dispose();
             base.OnFormClosing(e);
         }
@@ -316,6 +325,15 @@ namespace ScheduleDepartmentApp
             UiTheme.StyleButton(_publishGlobalButton, true);
             globalPanel.Controls.Add(_publishGlobalButton);
 
+            _autoGlobalPublishCheckBox = new CheckBox();
+            _autoGlobalPublishCheckBox.Text = "Автообновлять сайт";
+            _autoGlobalPublishCheckBox.Width = 158;
+            _autoGlobalPublishCheckBox.Height = 36;
+            _autoGlobalPublishCheckBox.Checked = true;
+            _autoGlobalPublishCheckBox.ForeColor = UiTheme.Text;
+            _autoGlobalPublishCheckBox.CheckedChanged += AutoGlobalPublishCheckBoxChanged;
+            globalPanel.Controls.Add(_autoGlobalPublishCheckBox);
+
             _protectedGlobalCheckBox = new CheckBox();
             _protectedGlobalCheckBox.Text = "Защищенный канал";
             _protectedGlobalCheckBox.Width = 154;
@@ -451,11 +469,12 @@ namespace ScheduleDepartmentApp
                     return;
                 }
 
-                bool restartServer = _server.IsRunning;
-                if (restartServer)
-                {
-                    _server.Stop();
-                }
+                    bool restartServer = _server.IsRunning;
+                    if (restartServer)
+                    {
+                        StopGlobalAutoPublishLoop();
+                        _server.Stop();
+                    }
 
                 Cursor = Cursors.WaitCursor;
                 _document = _parser.ParseFiles(files.ToArray(), selectedCourses);
@@ -507,6 +526,7 @@ namespace ScheduleDepartmentApp
 
         private void ClearCurrentSchedule(bool deleteJson)
         {
+            StopGlobalAutoPublishLoop();
             _server.Stop();
             _document = null;
             _loadedFilePaths.Clear();
@@ -601,10 +621,13 @@ namespace ScheduleDepartmentApp
             {
                 SetStatus("Сервер запущен локально. Для доступа с телефона подключите компьютер к сети.");
             }
+
+            StartGlobalAutoPublishLoop();
         }
 
         private void StopServerButtonClick(object sender, EventArgs e)
         {
+            StopGlobalAutoPublishLoop();
             _server.Stop();
             _startServerButton.Enabled = _document != null;
             _stopServerButton.Enabled = false;
@@ -626,15 +649,7 @@ namespace ScheduleDepartmentApp
             try
             {
                 Cursor = Cursors.WaitCursor;
-                SaveToPublicationPath();
-
-                string webIndexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
-                GitHubPagesPublisher publisher = new GitHubPagesPublisher("flvmming-coder", "Schedule-parser-NUST-MISIS", "gh-pages");
-                bool protectBrowserAccess = _protectedGlobalCheckBox.Checked;
-                string browserPassword = string.IsNullOrWhiteSpace(_globalPasswordTextBox.Text)
-                    ? BrowserScheduleProtector.DefaultBrowserPassword
-                    : _globalPasswordTextBox.Text;
-                GitHubPublishResult result = publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text, protectBrowserAccess, browserPassword);
+                GitHubPublishResult result = PublishGlobalNow();
                 _globalUrlTextBox.Text = result.PageUrl;
                 Clipboard.SetText(result.PageUrl);
                 string accessMode = result.IsProtected ? "защищенный" : "открытый";
@@ -658,6 +673,120 @@ namespace ScheduleDepartmentApp
             {
                 _globalPasswordTextBox.Text = BrowserScheduleProtector.DefaultBrowserPassword;
             }
+        }
+
+        private void AutoGlobalPublishCheckBoxChanged(object sender, EventArgs e)
+        {
+            if (_autoGlobalPublishCheckBox.Checked && _server.IsRunning)
+            {
+                StartGlobalAutoPublishLoop();
+                return;
+            }
+
+            StopGlobalAutoPublishLoop();
+        }
+
+        private GitHubPublishResult PublishGlobalNow()
+        {
+            SaveToPublicationPath();
+
+            string webIndexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
+            GitHubPagesPublisher publisher = new GitHubPagesPublisher("flvmming-coder", "Schedule-parser-NUST-MISIS", "gh-pages");
+            bool protectBrowserAccess = _protectedGlobalCheckBox.Checked;
+            string browserPassword = GetBrowserPassword();
+            return publisher.Publish(_document, webIndexPath, _githubTokenTextBox.Text, protectBrowserAccess, browserPassword);
+        }
+
+        private void StartGlobalAutoPublishLoop()
+        {
+            _globalAutoPublishTimer.Stop();
+            if (!_autoGlobalPublishCheckBox.Checked || _document == null)
+            {
+                return;
+            }
+
+            _globalAutoPublishTimer.Start();
+            QueueGlobalAutoPublish("запуска сервера");
+        }
+
+        private void StopGlobalAutoPublishLoop()
+        {
+            _globalAutoPublishTimer.Stop();
+        }
+
+        private void GlobalAutoPublishTimerTick(object sender, EventArgs e)
+        {
+            QueueGlobalAutoPublish("планового обновления");
+        }
+
+        private void QueueGlobalAutoPublish(string reason)
+        {
+            if (!_autoGlobalPublishCheckBox.Checked || !_server.IsRunning || _document == null || _globalPublishInProgress)
+            {
+                return;
+            }
+
+            _globalPublishInProgress = true;
+            SaveToPublicationPath();
+
+            GlobalPublishRequest request = new GlobalPublishRequest();
+            request.Document = _document;
+            request.WebIndexPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "web", "index.html");
+            request.GitHubToken = _githubTokenTextBox.Text;
+            request.ProtectBrowserAccess = _protectedGlobalCheckBox.Checked;
+            request.BrowserPassword = GetBrowserPassword();
+            request.Reason = reason;
+
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    GitHubPagesPublisher publisher = new GitHubPagesPublisher("flvmming-coder", "Schedule-parser-NUST-MISIS", "gh-pages");
+                    GitHubPublishResult result = publisher.Publish(request.Document, request.WebIndexPath, request.GitHubToken, request.ProtectBrowserAccess, request.BrowserPassword);
+                    SafeBeginInvoke(delegate
+                    {
+                        _globalUrlTextBox.Text = result.PageUrl;
+                        SetStatus("Глобальный сайт обновлен после " + request.Reason + ". Следующая проверка через 5 минут.");
+                    });
+                }
+                catch (Exception ex)
+                {
+                    SafeBeginInvoke(delegate
+                    {
+                        SetStatus("Глобальный сайт не обновлен: " + ex.Message);
+                    });
+                }
+                finally
+                {
+                    _globalPublishInProgress = false;
+                }
+            });
+        }
+
+        private void SafeBeginInvoke(MethodInvoker action)
+        {
+            if (IsDisposed || !IsHandleCreated)
+            {
+                return;
+            }
+
+            try
+            {
+                BeginInvoke(action);
+            }
+            catch
+            {
+            }
+        }
+
+        private string GetBrowserPassword()
+        {
+            if (string.IsNullOrWhiteSpace(_globalPasswordTextBox.Text))
+            {
+                return BrowserScheduleProtector.DefaultBrowserPassword;
+            }
+
+            return _globalPasswordTextBox.Text;
         }
 
         private void OpenWebButtonClick(object sender, EventArgs e)
@@ -799,6 +928,16 @@ namespace ScheduleDepartmentApp
         {
             _statusLabel.Text = text;
         }
+    }
+
+    internal sealed class GlobalPublishRequest
+    {
+        public ScheduleDocument Document { get; set; }
+        public string WebIndexPath { get; set; }
+        public string GitHubToken { get; set; }
+        public bool ProtectBrowserAccess { get; set; }
+        public string BrowserPassword { get; set; }
+        public string Reason { get; set; }
     }
 
     internal sealed class LoadedFilesForm : Form
